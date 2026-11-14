@@ -23,6 +23,9 @@
     },
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "noEmit": true
   },
   "exclude": ["dist"]

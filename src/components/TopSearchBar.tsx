@@ -128,8 +128,11 @@ export function TopSearchBar({
     }
   };
 
+  const activeOptionId =
+    dropdownOpen && matches[highlightedIdx] ? `search-opt-${matches[highlightedIdx].id}` : undefined;
+
   return (
-    <div className="no-print sticky top-0 z-20 border-b border-slate-200 dark:border-white/10 bg-white/95 dark:bg-[#07090F]/95 backdrop-blur-xs">
+    <header className="no-print sticky top-0 z-20 border-b border-slate-200 dark:border-white/10 bg-white/95 dark:bg-[#07090F]/95 backdrop-blur-xs">
       <div className="max-w-[1240px] mx-auto px-4 sm:px-8 lg:px-10 py-3 flex items-center justify-between gap-3">
         {/* Mobile Sidebar Drawer Button */}
         <button
@@ -147,7 +150,8 @@ export function TopSearchBar({
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
             <input
               type="text"
-              role="searchbox"
+              role="combobox"
+              aria-autocomplete="list"
               value={query}
               onFocus={() => {
                 setDropdownOpen(true);
@@ -163,6 +167,7 @@ export function TopSearchBar({
               aria-label="Global platform search"
               aria-expanded={dropdownOpen}
               aria-controls="global-search-results"
+              aria-activedescendant={activeOptionId}
               className="w-full pl-10 pr-9 py-2 rounded-xl border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#0E131F] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-600 dark:focus:ring-blue-500"
             />
             {query && (
@@ -181,12 +186,7 @@ export function TopSearchBar({
           </div>
 
           {dropdownOpen && (
-            <div
-              id="global-search-results"
-              role="listbox"
-              aria-label="Matching platform options"
-              className="absolute left-0 right-0 mt-2 rounded-xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#0E131F] shadow-xl overflow-hidden max-h-[380px] overflow-y-auto z-50"
-            >
+            <div className="absolute left-0 right-0 mt-2 rounded-xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#0E131F] shadow-xl overflow-hidden max-h-[380px] overflow-y-auto z-50">
               <div className="px-3.5 py-2 border-b border-slate-100 dark:border-white/10 text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center justify-between">
                 <span>
                   {query.trim()
@@ -201,12 +201,18 @@ export function TopSearchBar({
                   No matching options found for "{query}". Try searching "React", "Sudoku", "Google", "AI Mentor", or "Settings".
                 </div>
               ) : (
-                <div className="divide-y divide-slate-100 dark:divide-white/5">
+                <div
+                  id="global-search-results"
+                  role="listbox"
+                  aria-label="Matching platform options"
+                  className="divide-y divide-slate-100 dark:divide-white/5"
+                >
                   {matches.map((entry, idx) => {
                     const isHighlighted = idx === highlightedIdx;
                     return (
                       <button
                         key={entry.id}
+                        id={`search-opt-${entry.id}`}
                         type="button"
                         role="option"
                         aria-selected={isHighlighted}
@@ -410,6 +416,6 @@ export function TopSearchBar({
           </button>
         </div>
       </div>
-    </div>
+    </header>
   );
 }

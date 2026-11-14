@@ -7,12 +7,12 @@ import {
   LogIn,
   LogOut,
   Plus,
+  Save,
   ShieldCheck,
   Target,
   Trash2,
   UserCheck,
 } from 'lucide-react';
-import { signInWithGooglePopup } from '../lib/firebase';
 import type { CareerRole, SkillMatchBreakdown, UserProfile, UserSkill } from '../types';
 
 interface ProfileAuthViewProps {
@@ -20,10 +20,10 @@ interface ProfileAuthViewProps {
   roles: CareerRole[];
   match: SkillMatchBreakdown;
   onUpdateProfile: (next: UserProfile) => void;
-  onAuthSuccess: (userKey: string, nextProfile: UserProfile, token?: string) => void;
   onSignOut: () => void;
   onResetDemo: () => void;
   onVerifySkill: (skillName: string) => void;
+  onOpenAuthModal: () => void;
 }
 
 export function ProfileAuthView({
@@ -31,23 +31,22 @@ export function ProfileAuthView({
   roles,
   match,
   onUpdateProfile,
-  onAuthSuccess,
   onSignOut,
   onResetDemo,
   onVerifySkill,
+  onOpenAuthModal,
 }: ProfileAuthViewProps) {
-  const [authTab, setAuthTab] = useState<'signin' | 'register'>('register');
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [oauthStepProvider, setOauthStepProvider] = useState<'google' | 'microsoft' | null>(null);
-  const [oauthEmail, setOauthEmail] = useState('');
-  const [oauthName, setOauthName] = useState('');
+  // Draft state lets signed-out visitors enter details smoothly and trigger AuthModal on Save
+  const [draftName, setDraftName] = useState(profile.name);
+  const [draftEducation, setDraftEducation] = useState(profile.education);
+  const [draftCareerId, setDraftCareerId] = useState(profile.targetCareerId);
+  const [identitySaved, setIdentitySaved] = useState(false);
 
-  // Email/password form fields (positioned below Google & Microsoft options)
-  const [emailInput, setEmailInput] = useState('');
-  const [nameInput, setNameInput] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
+  useEffect(() => {
+    setDraftName(profile.name);
+    setDraftEducation(profile.education);
+    setDraftCareerId(profile.targetCareerId);
+  }, [profile.name, profile.education, profile.targetCareerId, profile.isSignedIn]);
 
   // Add skill
   const [newSkillName, setNewSkillName] = useState('');
@@ -71,128 +70,17 @@ export function ProfileAuthView({
 
   const currentRole = roles.find((r) => r.id === profile.targetCareerId) ?? roles[0];
 
-  useEffect(() => {
-    if (!showAuthModal) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowAuthModal(false);
-        setOauthStepProvider(null);
-        setAuthError('');
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [showAuthModal]);
-
-  const performServerAuth = async (params: {
-    mode: 'register' | 'signin';
-    name: string;
-    email: string;
-    password?: string;
-    authProvider: UserProfile['authProvider'];
-  }) => {
-    setIsSubmittingAuth(true);
-    setAuthError('');
-    try {
-      const endpoint = params.mode === 'register' ? '/api/auth/register' : '/api/auth/login';
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: params.name,
-          email: params.email,
-          password: params.password,
-          authProvider: params.authProvider,
-        }),
-      });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        key?: string;
-        token?: string;
-        profile?: UserProfile;
-        error?: string;
-      };
-      if (!res.ok || !data.profile || !data.key) {
-        setAuthError(data.error || 'Authentication failed. Please try again.');
-        return;
-      }
-      onAuthSuccess(data.key, data.profile, data.token);
-      setOauthStepProvider(null);
-      setShowAuthModal(false);
-      setPasswordInput('');
-      setEmailInput('');
-      setNameInput('');
-    } catch {
-      setAuthError('Network error while connecting to Voragen auth.');
-    } finally {
-      setIsSubmittingAuth(false);
-    }
-  };
-
-  const handleGooglePopupSignIn = async () => {
-    setIsSubmittingAuth(true);
-    setAuthError('');
-    try {
-      const { user } = await signInWithGooglePopup();
-      if (user.email) {
-        await performServerAuth({
-          mode: authTab,
-          name: user.displayName || user.email.split('@')[0],
-          email: user.email,
-          authProvider: 'google',
-        });
-        return;
-      }
-    } catch {
-      // Fall back to explicit Google account email confirmation step when popup is blocked or closed
-      setOauthStepProvider('google');
-      setOauthEmail('');
-      setOauthName('');
-    } finally {
-      setIsSubmittingAuth(false);
-    }
-  };
-
-  const handleOAuthConfirm = (e: React.FormEvent) => {
+  const handleSaveIdentity = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!oauthStepProvider) return;
-    const cleanEmail = oauthEmail.trim();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setAuthError('Please enter a valid account email.');
-      return;
-    }
-    const cleanName = oauthName.trim() || cleanEmail.split('@')[0];
-    performServerAuth({
-      mode: authTab,
-      name: cleanName,
-      email: cleanEmail,
-      authProvider: oauthStepProvider,
+    onUpdateProfile({
+      ...profile,
+      name: draftName.trim(),
+      education: draftEducation.trim(),
+      targetCareerId: draftCareerId,
     });
-  };
-
-  const handleEmailAuth = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanEmail = emailInput.trim();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setAuthError('Please enter a valid email address.');
-      return;
-    }
-    if (passwordInput.length < 6) {
-      setAuthError('Password must be at least 6 characters.');
-      return;
-    }
-    const cleanName =
-      authTab === 'register'
-        ? nameInput.trim() || cleanEmail.split('@')[0]
-        : cleanEmail.split('@')[0];
-
-    performServerAuth({
-      mode: authTab,
-      name: cleanName,
-      email: cleanEmail,
-      password: passwordInput,
-      authProvider: 'email',
-    });
+    if (!profile.isSignedIn) return;
+    setIdentitySaved(true);
+    setTimeout(() => setIdentitySaved(false), 2000);
   };
 
   const handleAddSkill = (e: React.FormEvent) => {
@@ -213,6 +101,7 @@ export function ProfileAuthView({
           { name: trimmed, level: newSkillLevel, category: newSkillCat, verified: false },
         ];
     onUpdateProfile({ ...profile, skills: updatedSkills });
+    if (!profile.isSignedIn) return;
     setNewSkillName('');
   };
 
@@ -231,6 +120,7 @@ export function ProfileAuthView({
         },
       ],
     });
+    if (!profile.isSignedIn) return;
     setCertTitle('');
     setCertIssuer('');
   };
@@ -254,6 +144,7 @@ export function ProfileAuthView({
         },
       ],
     });
+    if (!profile.isSignedIn) return;
     setProjTitle('');
     setProjDesc('');
     setProjSkills('');
@@ -267,11 +158,12 @@ export function ProfileAuthView({
       ...profile,
       careerGoals: [...profile.careerGoals, goalInput.trim()],
     });
+    if (!profile.isSignedIn) return;
     setGoalInput('');
   };
 
   const copyPortfolioMarkdown = async () => {
-    const md = `# ${profile.name} — Career Readiness Passport
+    const md = `# ${profile.name || 'Learner'} — Career Readiness Passport
 Target Role: ${currentRole.title} (${match.overallReadinessPct}% Ready)
 Skills: ${profile.skills.map((s) => `${s.name} (${s.level}%)`).join(', ')}
 Certifications: ${profile.certifications.map((c) => `${c.title} - ${c.issuer} (${c.year})`).join('; ')}
@@ -330,10 +222,7 @@ Projects: ${profile.projects.map((p) => `${p.title}: ${p.description}`).join('; 
           ) : (
             <button
               type="button"
-              onClick={() => {
-                setAuthTab('register');
-                setShowAuthModal(true);
-              }}
+              onClick={onOpenAuthModal}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors"
             >
               <LogIn className="w-3.5 h-3.5" />
@@ -345,10 +234,13 @@ Projects: ${profile.projects.map((p) => `${p.title}: ${p.description}`).join('; 
 
       {/* Identity & Career Goal Card */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4">
+        <form
+          onSubmit={handleSaveIdentity}
+          className="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4"
+        >
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-red-600/10 dark:bg-blue-500/15 flex items-center justify-center text-red-700 dark:text-blue-400 font-display font-bold text-lg">
-              {(profile.name.trim() || 'VG').slice(0, 2).toUpperCase()}
+              {(draftName.trim() || 'VG').slice(0, 2).toUpperCase()}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -378,8 +270,15 @@ Projects: ${profile.projects.map((p) => `${p.title}: ${p.description}`).join('; 
               <input
                 id="profile-name"
                 type="text"
-                value={profile.name}
-                onChange={(e) => onUpdateProfile({ ...profile, name: e.target.value })}
+                value={draftName}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDraftName(val);
+                  if (profile.isSignedIn) {
+                    onUpdateProfile({ ...profile, name: val, education: draftEducation, targetCareerId: draftCareerId });
+                  }
+                }}
+                placeholder="Enter your full name"
                 className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
               />
             </div>
@@ -394,8 +293,15 @@ Projects: ${profile.projects.map((p) => `${p.title}: ${p.description}`).join('; 
               <input
                 id="profile-education"
                 type="text"
-                value={profile.education}
-                onChange={(e) => onUpdateProfile({ ...profile, education: e.target.value })}
+                value={draftEducation}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDraftEducation(val);
+                  if (profile.isSignedIn) {
+                    onUpdateProfile({ ...profile, name: draftName, education: val, targetCareerId: draftCareerId });
+                  }
+                }}
+                placeholder="e.g., B.Tech CS or Software Intern"
                 className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
               />
             </div>
@@ -409,8 +315,14 @@ Projects: ${profile.projects.map((p) => `${p.title}: ${p.description}`).join('; 
               </label>
               <select
                 id="profile-target-career"
-                value={profile.targetCareerId}
-                onChange={(e) => onUpdateProfile({ ...profile, targetCareerId: e.target.value })}
+                value={draftCareerId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDraftCareerId(val);
+                  if (profile.isSignedIn) {
+                    onUpdateProfile({ ...profile, name: draftName, education: draftEducation, targetCareerId: val });
+                  }
+                }}
                 className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
               >
                 {roles.map((r) => (
@@ -420,8 +332,22 @@ Projects: ${profile.projects.map((p) => `${p.title}: ${p.description}`).join('; 
                 ))}
               </select>
             </div>
+
+            <button
+              type="submit"
+              className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-4 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors"
+            >
+              {identitySaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+              <span>
+                {identitySaved
+                  ? 'Profile Saved'
+                  : profile.isSignedIn
+                    ? 'Save Profile Details'
+                    : 'Save Profile Details (Requires Sign In)'}
+              </span>
+            </button>
           </div>
-        </div>
+        </form>
 
         {/* Career Goals Editor */}
         <div className="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 flex flex-col justify-between">
@@ -768,256 +694,6 @@ Projects: ${profile.projects.map((p) => `${p.title}: ${p.description}`).join('; 
           </form>
         </section>
       </div>
-
-      {/* Sign In / Register Modal with Google, Microsoft, and Email below */}
-      {showAuthModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="auth-modal-title"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs"
-        >
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#0E131F] p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between">
-              <h2
-                id="auth-modal-title"
-                className="font-display text-xl font-bold text-slate-950 dark:text-white"
-              >
-                {authTab === 'register' ? 'Create Your Voragen Account' : 'Sign In to Voragen'}
-              </h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAuthModal(false);
-                  setOauthStepProvider(null);
-                  setAuthError('');
-                }}
-                className="text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-              >
-                Close
-              </button>
-            </div>
-
-            {/* Sign In / Register Switcher */}
-            <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-slate-100 dark:bg-[#141B2D]">
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthTab('register');
-                  setOauthStepProvider(null);
-                  setAuthError('');
-                }}
-                className={`py-2 text-xs font-semibold rounded-md transition-colors ${
-                  authTab === 'register'
-                    ? 'bg-white dark:bg-blue-600 text-slate-900 dark:text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400'
-                }`}
-              >
-                Register
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthTab('signin');
-                  setOauthStepProvider(null);
-                  setAuthError('');
-                }}
-                className={`py-2 text-xs font-semibold rounded-md transition-colors ${
-                  authTab === 'signin'
-                    ? 'bg-white dark:bg-blue-600 text-slate-900 dark:text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400'
-                }`}
-              >
-                Sign In
-              </button>
-            </div>
-
-            {oauthStepProvider ? (
-              <form onSubmit={handleOAuthConfirm} className="space-y-3">
-                <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                  Continue with{' '}
-                  <span className="font-bold capitalize">{oauthStepProvider}</span> Account
-                </p>
-                <input
-                  type="text"
-                  value={oauthName}
-                  onChange={(e) => setOauthName(e.target.value)}
-                  placeholder="Display Name"
-                  aria-label="Provider display name"
-                  className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
-                />
-                <input
-                  type="email"
-                  value={oauthEmail}
-                  onChange={(e) => setOauthEmail(e.target.value)}
-                  placeholder={
-                    oauthStepProvider === 'google'
-                      ? 'your.name@gmail.com'
-                      : 'your.name@outlook.com'
-                  }
-                  aria-label="Provider account email"
-                  required
-                  className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
-                />
-                {authError && <p className="text-xs text-red-600 dark:text-pink-400">{authError}</p>}
-                <div className="flex gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setOauthStepProvider(null)}
-                    className="flex-1 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-white/15 text-slate-700 dark:text-slate-300"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2 rounded-lg text-xs font-semibold bg-red-600 text-white dark:bg-blue-600"
-                  >
-                    Confirm {oauthStepProvider === 'google' ? 'Google' : 'Microsoft'}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <>
-                {/* Google & Microsoft Account Buttons FIRST */}
-                <div className="space-y-2.5">
-                  <button
-                    type="button"
-                    onClick={handleGooglePopupSignIn}
-                    disabled={isSubmittingAuth}
-                    className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-[#141B2D] text-sm font-semibold text-slate-800 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 transition-colors disabled:opacity-60"
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
-                      <path
-                        fill="#4285F4"
-                        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-                      />
-                      <path
-                        fill="#34A853"
-                        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24z"
-                      />
-                      <path
-                        fill="#FBBC05"
-                        d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14z"
-                      />
-                      <path
-                        fill="#EA4335"
-                        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96z"
-                      />
-                    </svg>
-                    <span>
-                      {authTab === 'register' ? 'Register with Google' : 'Sign in with Google'}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOauthStepProvider('microsoft');
-                      setOauthEmail('');
-                      setOauthName('');
-                    }}
-                    className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-[#141B2D] text-sm font-semibold text-slate-800 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 transition-colors"
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 21 21" aria-hidden="true">
-                      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
-                      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
-                      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
-                      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
-                    </svg>
-                    <span>
-                      {authTab === 'register'
-                        ? 'Register with Microsoft'
-                        : 'Sign in with Microsoft'}
-                    </span>
-                  </button>
-                </div>
-
-                <div className="relative flex items-center py-1">
-                  <div className="flex-grow border-t border-slate-200 dark:border-white/10" />
-                  <span className="shrink mx-3 text-[11px] text-slate-500 dark:text-slate-400">
-                    or continue with email
-                  </span>
-                  <div className="flex-grow border-t border-slate-200 dark:border-white/10" />
-                </div>
-
-                {/* Email Registration / Sign In Form BELOW Google & Microsoft */}
-                <form onSubmit={handleEmailAuth} className="space-y-3">
-                  {authTab === 'register' && (
-                    <div>
-                      <label
-                        htmlFor="auth-name"
-                        className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1"
-                      >
-                        Full Name
-                      </label>
-                      <input
-                        id="auth-name"
-                        type="text"
-                        value={nameInput}
-                        onChange={(e) => setNameInput(e.target.value)}
-                        placeholder="Your full name"
-                        className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
-                      />
-                    </div>
-                  )}
-
-                  <div>
-                    <label
-                      htmlFor="auth-email"
-                      className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1"
-                    >
-                      Email Address
-                    </label>
-                    <input
-                      id="auth-email"
-                      type="email"
-                      value={emailInput}
-                      onChange={(e) => setEmailInput(e.target.value)}
-                      placeholder="student@university.edu"
-                      required
-                      className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="auth-password"
-                      className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1"
-                    >
-                      Password
-                    </label>
-                    <input
-                      id="auth-password"
-                      type="password"
-                      value={passwordInput}
-                      onChange={(e) => setPasswordInput(e.target.value)}
-                      placeholder="Minimum 6 characters"
-                      required
-                      className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
-                    />
-                  </div>
-
-                  {authError && (
-                    <p className="text-xs text-red-600 dark:text-pink-400">{authError}</p>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={isSubmittingAuth}
-                    className="w-full py-2.5 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors disabled:opacity-60"
-                  >
-                    {isSubmittingAuth
-                      ? 'Preparing Fresh Workspace...'
-                      : authTab === 'register'
-                        ? 'Create Fresh Account with Email'
-                        : 'Sign In with Email'}
-                  </button>
-                </form>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

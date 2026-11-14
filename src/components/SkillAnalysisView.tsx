@@ -177,9 +177,15 @@ export function SkillAnalysisView({
         {/* Interactive Quiz & Genuine Skill Authenticity Test */}
         <section className="lg:col-span-6 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-5">
           {/* Segmented Mode Switcher */}
-          <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-[#141B2D]">
+          <div
+            role="tablist"
+            aria-label="Skill evaluation mode"
+            className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-[#141B2D]"
+          >
             <button
               type="button"
+              role="tab"
+              aria-selected={testMode === 'diagnostic'}
               onClick={() => {
                 setTestMode('diagnostic');
                 setAuthenticityResult(null);
@@ -195,6 +201,8 @@ export function SkillAnalysisView({
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={testMode === 'authenticity'}
               onClick={() => {
                 setTestMode('authenticity');
                 setLastOutcome(null);
@@ -225,11 +233,12 @@ export function SkillAnalysisView({
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-1.5">
+          <div role="group" aria-label="Select skill topic" className="flex flex-wrap gap-1.5">
             {quizSkills.map((sk) => (
               <button
                 key={sk}
                 type="button"
+                aria-pressed={selectedSkill === sk}
                 onClick={() => {
                   setSelectedSkill(sk);
                   setAnswers({});

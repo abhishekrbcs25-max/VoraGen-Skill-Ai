@@ -1,9 +1,40 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 
-const DEFAULT_SESSION_SECRET =
-  process.env.SESSION_SECRET ||
-  process.env.GEMINI_API_KEY ||
-  'voragen-local-ephemeral-session-secret';
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+let cachedSessionSecret: string | null = null;
+
+export function getSessionSecret(): string {
+  if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.trim().length >= 16) {
+    return process.env.SESSION_SECRET.trim();
+  }
+  if (cachedSessionSecret) return cachedSessionSecret;
+
+  const secretPath = path.resolve(process.cwd(), '.pathforge-data', '.session-secret');
+  try {
+    if (fs.existsSync(secretPath)) {
+      const existing = fs.readFileSync(secretPath, 'utf-8').trim();
+      if (existing.length >= 32) {
+        cachedSessionSecret = existing;
+        return cachedSessionSecret;
+      }
+    }
+    const generated = crypto.randomBytes(32).toString('hex');
+    fs.mkdirSync(path.dirname(secretPath), { recursive: true });
+    fs.writeFileSync(secretPath, generated, { mode: 0o600 });
+    cachedSessionSecret = generated;
+    return cachedSessionSecret;
+  } catch {
+    cachedSessionSecret = crypto.randomBytes(32).toString('hex');
+    return cachedSessionSecret;
+  }
+}
+
+export function isValidEmailFormat(email: string): boolean {
+  return EMAIL_PATTERN.test(email.trim());
+}
 
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -29,7 +60,7 @@ export function signSessionToken(
   userKey: string,
   ttlMs = 7 * 24 * 60 * 60_000,
   now = Date.now(),
-  secret = DEFAULT_SESSION_SECRET,
+  secret = getSessionSecret(),
 ): string {
   const payload = Buffer.from(
     JSON.stringify({
@@ -45,7 +76,7 @@ export function verifySessionToken(
   token: string,
   expectedKey?: string,
   now = Date.now(),
-  secret = DEFAULT_SESSION_SECRET,
+  secret = getSessionSecret(),
 ): { valid: boolean; sub?: string } {
   if (!token || !token.includes('.')) return { valid: false };
   const [payload, sig] = token.split('.');

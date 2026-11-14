@@ -180,6 +180,7 @@ export function Sidebar({
                 <button
                   key={id}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => onChangeTheme(id)}
                   className={`flex items-center justify-center gap-1 py-1.5 px-1.5 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap ${
                     active

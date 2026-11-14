@@ -6,6 +6,7 @@ import {
   getChallengeByIndex,
   queryCodingCatalog,
 } from '../data/codingCatalog';
+import { executeCodeInSandbox } from '../utils/codeSandbox';
 import type { CodingChallenge, Difficulty, UserProfile } from '../types';
 
 interface CodeArenaViewProps {
@@ -30,6 +31,7 @@ export function CodeArenaView({
     passed: boolean;
     details: string[];
   } | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
   const [showHint, setShowHint] = useState(false);
 
   const catalogResult = useMemo(
@@ -57,42 +59,16 @@ export function CodeArenaView({
     }
   }, [initialChallengeId]);
 
-  const handleRunTests = () => {
-    const details: string[] = [];
-    let allPassed = true;
-
+  const handleRunTests = async () => {
+    setIsRunning(true);
     try {
-      // Safe local evaluation of user's `solve(...)` function against deterministic test cases
-      const factory = new Function(`${code}; return typeof solve === 'function' ? solve : null;`);
-      const solveFn = factory() as ((...args: unknown[]) => unknown) | null;
-
-      if (!solveFn) {
-        setRunOutput({
-          passed: false,
-          details: ['Error: Please define `function solve(...)` in the editor.'],
-        });
-        return;
-      }
-
-      selectedChallenge.testCases.forEach((tc, idx) => {
-        const clonedArgs = JSON.parse(JSON.stringify(tc.args)) as unknown[];
-        const actual = solveFn(...clonedArgs);
-        const ok = JSON.stringify(actual) === JSON.stringify(tc.expected);
-        if (!ok) allPassed = false;
-        details.push(
-          `Test ${idx + 1}: ${ok ? 'PASS' : 'FAIL'} — expected ${JSON.stringify(tc.expected)}, got ${JSON.stringify(actual)}`,
-        );
-      });
-
-      if (allPassed) {
+      const result = await executeCodeInSandbox(code, selectedChallenge.testCases, 1500);
+      if (result.passed) {
         onSolveChallenge(selectedChallenge.id, selectedChallenge.difficulty);
       }
-      setRunOutput({ passed: allPassed, details });
-    } catch (err) {
-      setRunOutput({
-        passed: false,
-        details: [`Runtime Error: ${(err as Error).message}`],
-      });
+      setRunOutput({ passed: result.passed, details: result.details });
+    } finally {
+      setIsRunning(false);
     }
   };
 
@@ -301,11 +277,12 @@ export function CodeArenaView({
 
             <button
               type="button"
+              disabled={isRunning}
               onClick={handleRunTests}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors disabled:opacity-60"
             >
               <Play className="w-3.5 h-3.5" />
-              <span>Run & Submit Solution</span>
+              <span>{isRunning ? 'Running in Sandbox...' : 'Run & Submit Solution'}</span>
             </button>
           </div>
 

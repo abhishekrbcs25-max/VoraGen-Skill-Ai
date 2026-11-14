@@ -290,6 +290,7 @@ export function OnboardingWizardModal({
                         min={10}
                         max={100}
                         value={s.level}
+                        aria-label={`${s.name} proficiency`}
                         onChange={(e) => {
                           const val = Number(e.target.value);
                           setSkills((prev) =>

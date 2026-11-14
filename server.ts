@@ -29,12 +29,14 @@ import {
 } from './src/utils/geminiResilience.ts';
 import {
   hashPassword,
+  isValidEmailFormat,
   signSessionToken,
   SlidingWindowRateLimiter,
   verifyPassword,
   verifySessionToken,
 } from './src/utils/securityHelpers.ts';
 import { sanitizeTextField, sanitizeUserProfile } from './src/utils/validation.ts';
+import { adminAuth } from './src/lib/firebase-admin.ts';
 import { requireAuth, type AuthRequest } from './src/middleware/auth.ts';
 import {
   getOrCreateUser,
@@ -164,7 +166,14 @@ async function withTimeout<T>(promise: Promise<T>, ms = 8500): Promise<T> {
   }
 }
 
-async function startServer() {
+export interface CreateApiAppOptions {
+  profileStore?: Record<string, UserProfile>;
+  credentialsStore?: Record<string, string>;
+  persistStores?: boolean;
+  verifyIdTokenFn?: (idToken: string) => Promise<{ email?: string; email_verified?: boolean }>;
+}
+
+export function createApiApp(options: CreateApiAppOptions = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '12mb' }));
@@ -175,6 +184,12 @@ async function startServer() {
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), geolocation=()');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+    res.setHeader(
+      'Content-Security-Policy',
+      "object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
+    );
     next();
   });
 
@@ -197,8 +212,18 @@ async function startServer() {
     next();
   });
 
-  let profileStore = ensureDataStore();
-  let credentialsStore = ensureCredentialsStore();
+  const shouldPersist = options.persistStores !== false;
+  const profileStore = options.profileStore ?? ensureDataStore();
+  const credentialsStore = options.credentialsStore ?? ensureCredentialsStore();
+  const verifyIdTokenFn =
+    options.verifyIdTokenFn ?? ((token: string) => adminAuth.verifyIdToken(token));
+
+  const persistProfileStore = () => {
+    if (shouldPersist) saveDataStore(profileStore);
+  };
+  const persistCredentialsStore = () => {
+    if (shouldPersist) saveCredentialsStore(credentialsStore);
+  };
 
   function verifyProfileAccess(req: express.Request, key: string): boolean {
     if (!key || key === 'default') return false;
@@ -230,7 +255,7 @@ async function startServer() {
     res.json(profileStore[key]);
   });
 
-  // Persist learner profile updates (authenticated users only + sanitized)
+  // Persist learner profile updates (authenticated users only + sanitized + immutable authProvider)
   app.put('/api/profile', (req, res) => {
     const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
     if (!verifyProfileAccess(req, key)) {
@@ -242,13 +267,15 @@ async function startServer() {
       res.status(400).json({ error: 'Invalid profile payload' });
       return;
     }
+    const existingProvider = profileStore[key]?.authProvider;
     const sanitized = sanitizeUserProfile({
       ...body,
       email: key,
       isSignedIn: true,
+      authProvider: existingProvider || body.authProvider || 'email',
     });
     profileStore[key] = sanitized;
-    saveDataStore(profileStore);
+    persistProfileStore();
     res.json({ ok: true, profile: sanitized });
   });
 
@@ -268,27 +295,41 @@ async function startServer() {
       needsOnboarding: false,
     };
     profileStore[key] = fresh;
-    saveDataStore(profileStore);
+    persistProfileStore();
     res.json({ ok: true, profile: fresh });
   });
 
   // Register a brand-new user with salted scrypt password hashing & fresh empty profile
-  app.post('/api/auth/register', (req, res) => {
-    const { name, email, password, authProvider } = req.body as {
+  app.post('/api/auth/register', async (req, res) => {
+    const { name, email, password, authProvider, idToken } = req.body as {
       name?: string;
       email?: string;
       password?: string;
       authProvider?: UserProfile['authProvider'];
+      idToken?: string;
     };
     const cleanEmail = sanitizeTextField(email || '', 160).toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      res.status(400).json({ error: 'Valid email is required' });
+    if (!cleanEmail || !isValidEmailFormat(cleanEmail)) {
+      res.status(400).json({ error: 'A valid email address (e.g., name@domain.com) is required.' });
       return;
     }
-    const provider = authProvider || 'email';
+    const provider: UserProfile['authProvider'] =
+      authProvider === 'google' || authProvider === 'microsoft' ? authProvider : 'email';
     if (provider === 'email' && (!password || password.length < 6)) {
       res.status(400).json({ error: 'Password must be at least 6 characters.' });
       return;
+    }
+    if (provider === 'google' && idToken) {
+      try {
+        const decoded = await verifyIdTokenFn(idToken);
+        if (decoded.email?.toLowerCase() !== cleanEmail || !decoded.email_verified) {
+          res.status(403).json({ error: 'Google ID token email verification mismatch.' });
+          return;
+        }
+      } catch {
+        res.status(401).json({ error: 'Invalid Google sign-in token.' });
+        return;
+      }
     }
     if (profileStore[cleanEmail]) {
       res.status(409).json({ error: 'An account with this email already exists. Please Sign In instead.' });
@@ -298,7 +339,7 @@ async function startServer() {
     const cleanName = sanitizeTextField(name || '', 80) || cleanEmail.split('@')[0];
     if (provider === 'email' && password) {
       credentialsStore[cleanEmail] = hashPassword(password);
-      saveCredentialsStore(credentialsStore);
+      persistCredentialsStore();
     }
 
     const freshProfile = createFreshUserProfile({
@@ -307,25 +348,27 @@ async function startServer() {
       authProvider: provider,
     });
     profileStore[cleanEmail] = freshProfile;
-    saveDataStore(profileStore);
+    persistProfileStore();
     const token = signSessionToken(cleanEmail);
     res.json({ ok: true, key: cleanEmail, token, profile: freshProfile });
   });
 
-  // Log in existing user with password verification (or initialize OAuth first-timers)
-  app.post('/api/auth/login', (req, res) => {
-    const { email, name, password, authProvider } = req.body as {
+  // Log in existing user with strict password or verified OAuth proof (prevents provider spoofing takeover)
+  app.post('/api/auth/login', async (req, res) => {
+    const { email, name, password, authProvider, idToken } = req.body as {
       email?: string;
       name?: string;
       password?: string;
       authProvider?: UserProfile['authProvider'];
+      idToken?: string;
     };
     const cleanEmail = sanitizeTextField(email || '', 160).toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      res.status(400).json({ error: 'Valid email is required' });
+    if (!cleanEmail || !isValidEmailFormat(cleanEmail)) {
+      res.status(400).json({ error: 'A valid email address (e.g., name@domain.com) is required.' });
       return;
     }
-    const provider = authProvider || 'email';
+    const provider: UserProfile['authProvider'] =
+      authProvider === 'google' || authProvider === 'microsoft' ? authProvider : 'email';
 
     if (provider === 'email') {
       const storedHash = credentialsStore[cleanEmail];
@@ -337,16 +380,55 @@ async function startServer() {
         res.status(401).json({ error: 'Incorrect email or password.' });
         return;
       }
+      if (!storedHash && profileStore[cleanEmail].authProvider !== 'email') {
+        res.status(403).json({
+          error: `This account uses ${profileStore[cleanEmail].authProvider.toUpperCase()} sign-in. Please continue with ${profileStore[cleanEmail].authProvider}.`,
+        });
+        return;
+      }
+      if (!storedHash && (!password || password.length < 6)) {
+        res.status(401).json({ error: 'Password is required.' });
+        return;
+      }
       if (!storedHash && password && password.length >= 6) {
         credentialsStore[cleanEmail] = hashPassword(password);
-        saveCredentialsStore(credentialsStore);
+        persistCredentialsStore();
+      }
+    } else {
+      let hasVerifiedGoogleToken = false;
+      if (provider === 'google' && idToken) {
+        try {
+          const decoded = await verifyIdTokenFn(idToken);
+          hasVerifiedGoogleToken =
+            decoded.email?.toLowerCase() === cleanEmail && Boolean(decoded.email_verified);
+          if (!hasVerifiedGoogleToken) {
+            res.status(403).json({ error: 'Google ID token did not verify this email address.' });
+            return;
+          }
+        } catch {
+          res.status(401).json({ error: 'Invalid or expired Google ID token.' });
+          return;
+        }
+      }
+
+      const existingAccount = profileStore[cleanEmail];
+      if (existingAccount && !hasVerifiedGoogleToken) {
+        if (credentialsStore[cleanEmail] || existingAccount.authProvider !== provider) {
+          res.status(403).json({
+            error:
+              existingAccount.authProvider === 'email'
+                ? 'This email is registered with a password. Please sign in with your email and password.'
+                : `This email is registered with ${existingAccount.authProvider}. Please verify via ${existingAccount.authProvider}.`,
+          });
+          return;
+        }
       }
     }
 
     if (profileStore[cleanEmail]) {
       const existing = { ...profileStore[cleanEmail], isSignedIn: true };
       profileStore[cleanEmail] = existing;
-      saveDataStore(profileStore);
+      persistProfileStore();
       const token = signSessionToken(cleanEmail);
       res.json({ ok: true, key: cleanEmail, token, isNew: false, profile: existing });
       return;
@@ -358,7 +440,7 @@ async function startServer() {
       authProvider: provider,
     });
     profileStore[cleanEmail] = freshProfile;
-    saveDataStore(profileStore);
+    persistProfileStore();
     const token = signSessionToken(cleanEmail);
     res.json({ ok: true, key: cleanEmail, token, isNew: true, profile: freshProfile });
   });
@@ -427,7 +509,7 @@ async function startServer() {
 
   // Multi-Model Interactions API Chatbot (Free-tier default models: gemini-4-hydrogen & gemini-3.1-flash-lite)
   app.post('/api/ai/chat', async (req, res) => {
-    const { message, model, thinkingLevel, previousInteractionId, profile } = req.body as {
+    const { message: rawMessage, model, thinkingLevel, previousInteractionId, profile } = req.body as {
       message?: string;
       model?: ChatModelId;
       thinkingLevel?: ThinkingPreset;
@@ -435,7 +517,8 @@ async function startServer() {
       profile?: UserProfile;
     };
 
-    if (!message || !message.trim()) {
+    const message = sanitizeTextField(rawMessage || '', 2000);
+    if (!message) {
       res.status(400).json({ error: 'Message is required' });
       return;
     }
@@ -517,14 +600,16 @@ Give clear, accurate, actionable guidance with code examples or concrete study s
 
   // Search & Maps Grounded Career Advisor
   app.post('/api/ai/grounded-search', async (req, res) => {
-    const { query, useSearch = true, useMaps = false, cityHint } = req.body as {
+    const { query: rawQuery, useSearch = true, useMaps = false, cityHint: rawCityHint } = req.body as {
       query?: string;
       useSearch?: boolean;
       useMaps?: boolean;
       cityHint?: string;
     };
 
-    if (!query || !query.trim()) {
+    const query = sanitizeTextField(rawQuery || '', 500);
+    const cityHint = sanitizeTextField(rawCityHint || '', 100);
+    if (!query) {
       res.status(400).json({ error: 'Query is required' });
       return;
     }
@@ -668,11 +753,14 @@ Give clear, accurate, actionable guidance with code examples or concrete study s
 
   // Mock Technical Interview Evaluation Endpoint
   app.post('/api/ai/interview-eval', async (req, res) => {
-    const { question, answer, roleTitle } = req.body as {
+    const { question: rawQuestion, answer: rawAnswer, roleTitle: rawRoleTitle } = req.body as {
       question?: string;
       answer?: string;
       roleTitle?: string;
     };
+    const question = sanitizeTextField(rawQuestion || '', 600);
+    const answer = sanitizeTextField(rawAnswer || '', 3000);
+    const roleTitle = sanitizeTextField(rawRoleTitle || '', 120);
     if (!question || !answer) {
       res.status(400).json({ error: 'Question and answer are required' });
       return;
@@ -949,13 +1037,14 @@ Produce concise, grounded outputs from the 4 collaborating agents:
 
   // AI Mentor Chat Endpoint
   app.post('/api/ai/mentor', async (req, res) => {
-    const { mentorId, message, profile, history } = req.body as {
+    const { mentorId, message: rawMessage, profile, history } = req.body as {
       mentorId: string;
       message: string;
       profile: UserProfile;
       history?: Array<{ role: 'user' | 'assistant'; text: string }>;
     };
 
+    const message = sanitizeTextField(rawMessage || '', 2000);
     if (!message || !profile) {
       res.status(400).json({ error: 'Message and profile are required' });
       return;
@@ -1022,12 +1111,14 @@ Give practical, encouraging, technically accurate advice in 3-5 concise sentence
 
   // AI Video Lesson Studio Generator
   app.post('/api/ai/video-lesson', async (req, res) => {
-    const { topic, mentorId, targetRoleTitle } = req.body as {
+    const { topic: rawTopic, mentorId, targetRoleTitle: rawRoleTitle } = req.body as {
       topic: string;
       mentorId: string;
       targetRoleTitle: string;
     };
 
+    const topic = sanitizeTextField(rawTopic || '', 120);
+    const targetRoleTitle = sanitizeTextField(rawRoleTitle || '', 120);
     if (!topic) {
       res.status(400).json({ error: 'Topic is required' });
       return;
@@ -1171,6 +1262,12 @@ Give practical, encouraging, technically accurate advice in 3-5 concise sentence
       res.status(500).json({ error: (err as Error).message });
     }
   });
+
+  return app;
+}
+
+async function startServer() {
+  const app = createApiApp();
 
   // HTTP server + Live API WebSocket bridge (/ws/live)
   const httpServer = http.createServer(app);
@@ -1352,7 +1449,9 @@ Give practical, encouraging, technically accurate advice in 3-5 concise sentence
   });
 }
 
-startServer().catch((err) => {
-  console.error('Failed to start Voragen server:', err);
-  process.exit(1);
-});
+if (!process.env.VORAGEN_TEST_MODE) {
+  startServer().catch((err) => {
+    console.error('Failed to start Voragen server:', err);
+    process.exit(1);
+  });
+}

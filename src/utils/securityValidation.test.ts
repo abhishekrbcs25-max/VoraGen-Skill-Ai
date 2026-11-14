@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import {
+  getSessionSecret,
   hashPassword,
+  isValidEmailFormat,
   verifyPassword,
   signSessionToken,
   verifySessionToken,
@@ -11,12 +15,31 @@ import { sanitizeExternalUrl, sanitizeUserProfile } from './validation';
 import { searchPlatformOptions } from './searchIndex';
 import { createBlankUnauthenticatedProfile } from '../data/careerData';
 
+process.env.VORAGEN_TEST_MODE = '1';
+const { createApiApp } = await import('../../server');
+
 test('hashPassword and verifyPassword validate matching passwords and reject mismatches/malformed hashes', () => {
   const hash = hashPassword('superSecret!23');
   assert.equal(verifyPassword('superSecret!23', hash), true);
   assert.equal(verifyPassword('wrongPassword', hash), false);
   assert.equal(verifyPassword('superSecret!23', 'not-a-valid-hash'), false);
   assert.equal(verifyPassword('superSecret!23', ''), false);
+});
+
+test('getSessionSecret never uses predictable literal or GEMINI_API_KEY fallback', () => {
+  const secret = getSessionSecret();
+  assert.ok(secret.length >= 32);
+  assert.notEqual(secret, 'voragen-local-ephemeral-session-secret');
+  if (process.env.GEMINI_API_KEY) {
+    assert.notEqual(secret, process.env.GEMINI_API_KEY);
+  }
+});
+
+test('isValidEmailFormat enforces RFC-style user@domain.tld structure', () => {
+  assert.equal(isValidEmailFormat('arjun.rao@voragen.dev'), true);
+  assert.equal(isValidEmailFormat('invalid-email'), false);
+  assert.equal(isValidEmailFormat('user@localhost'), false);
+  assert.equal(isValidEmailFormat('@domain.com'), false);
 });
 
 test('signSessionToken and verifySessionToken enforce signature, user binding, and expiry', () => {
@@ -95,4 +118,147 @@ test('searchPlatformOptions returns expected targets for resume, Sudoku, Abhishe
   assert.equal(searchPlatformOptions('Sudoku')[0]?.subTarget, 'sudoku');
   assert.equal(searchPlatformOptions('Abhishek')[0]?.targetSection, 'support');
   assert.equal(searchPlatformOptions('3D')[0]?.subTarget, 'skill-defender-3d');
+});
+
+test('HTTP API enforces password auth, blocks OAuth account takeover, verifies session tokens, and sanitizes XSS URLs', async () => {
+  const app = createApiApp({
+    profileStore: {},
+    credentialsStore: {},
+    persistStores: false,
+    verifyIdTokenFn: async (token) => {
+      if (token === 'valid-google-token') {
+        return { email: 'oauth.user@voragen.test', email_verified: true };
+      }
+      throw new Error('Invalid token');
+    },
+  });
+
+  const server = http.createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  try {
+    // 1. Security headers check
+    const healthRes = await fetch(`${baseUrl}/api/health`);
+    assert.equal(healthRes.status, 200);
+    assert.equal(healthRes.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(healthRes.headers.get('x-frame-options'), 'SAMEORIGIN');
+    assert.equal(healthRes.headers.get('x-permitted-cross-domain-policies'), 'none');
+    assert.match(healthRes.headers.get('content-security-policy') || '', /object-src 'none'/);
+
+    // 2. Reject invalid email format
+    const badReg = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'not-an-email', password: 'password123', authProvider: 'email' }),
+    });
+    assert.equal(badReg.status, 400);
+
+    // 3. Register email account & get signed session token
+    const regRes = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Meera Nair',
+        email: 'meera@voragen.test',
+        password: 'strongPassword!9',
+        authProvider: 'email',
+      }),
+    });
+    assert.equal(regRes.status, 200);
+    const regBody = (await regRes.json()) as { token: string; key: string };
+    assert.ok(regBody.token);
+    assert.equal(regBody.key, 'meera@voragen.test');
+
+    // 4. Duplicate registration returns 409
+    const dupRes = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'meera@voragen.test',
+        password: 'strongPassword!9',
+        authProvider: 'email',
+      }),
+    });
+    assert.equal(dupRes.status, 409);
+
+    // 5. Wrong password returns 401
+    const wrongPassRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'meera@voragen.test',
+        password: 'wrongPassword',
+        authProvider: 'email',
+      }),
+    });
+    assert.equal(wrongPassRes.status, 401);
+
+    // 6. OAuth spoofing takeover attempt against email account blocked with 403
+    const takeoverRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'meera@voragen.test',
+        authProvider: 'google',
+      }),
+    });
+    assert.equal(takeoverRes.status, 403);
+
+    // 7. Verified Google idToken succeeds
+    const oauthOkRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'oauth.user@voragen.test',
+        name: 'OAuth User',
+        authProvider: 'google',
+        idToken: 'valid-google-token',
+      }),
+    });
+    assert.equal(oauthOkRes.status, 200);
+
+    // 8. Missing or tampered x-voragen-token blocked on profile GET/PUT
+    const unauthGet = await fetch(`${baseUrl}/api/profile?key=meera@voragen.test`);
+    assert.equal(unauthGet.status, 401);
+
+    // 9. Valid token allows PUT /api/profile, preserves authProvider, and strips XSS URLs
+    const authGet = await fetch(`${baseUrl}/api/profile?key=meera@voragen.test`, {
+      headers: { 'x-voragen-token': regBody.token },
+    });
+    assert.equal(authGet.status, 200);
+    const currentProfile = (await authGet.json()) as Record<string, unknown>;
+
+    const putRes = await fetch(`${baseUrl}/api/profile?key=meera@voragen.test`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-voragen-token': regBody.token,
+      },
+      body: JSON.stringify({
+        ...currentProfile,
+        authProvider: 'google', // Attempted provider mutation should be ignored
+        githubUrl: 'javascript:alert(1)',
+        projects: [
+          {
+            id: 'p1',
+            title: 'Portfolio',
+            description: 'Demo',
+            skillsUsed: ['TypeScript'],
+            repoUrl: 'javascript:alert(document.cookie)',
+          },
+        ],
+      }),
+    });
+    assert.equal(putRes.status, 200);
+    const putBody = (await putRes.json()) as {
+      profile: { authProvider: string; githubUrl: string; projects: Array<{ repoUrl?: string }> };
+    };
+    assert.equal(putBody.profile.authProvider, 'email');
+    assert.equal(putBody.profile.githubUrl, '');
+    assert.equal(putBody.profile.projects[0].repoUrl, undefined);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
 });

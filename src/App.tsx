@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { TopSearchBar } from './components/TopSearchBar';
 import { SupportModal } from './components/SupportModal';
@@ -184,16 +184,54 @@ export default function App() {
     }
   }, [notifications, userKey]);
 
-  const pushNotification = (params: {
-    title: string;
-    detail: string;
-    category: NotificationCategory;
-    targetSection?: NavSection;
-    subTarget?: string;
-  }) => {
-    const incoming = createNotification(params);
-    setNotifications((prev) => prependNotification(prev, incoming));
-  };
+  const autoSyncAgentsRef = useRef(settings.autoSyncAgents);
+  useEffect(() => {
+    autoSyncAgentsRef.current = settings.autoSyncAgents;
+  }, [settings.autoSyncAgents]);
+
+  const pushNotification = useCallback(
+    (params: {
+      title: string;
+      detail: string;
+      category: NotificationCategory;
+      targetSection?: NavSection;
+      subTarget?: string;
+    }) => {
+      const incoming = createNotification(params);
+      setNotifications((prev) => prependNotification(prev, incoming));
+    },
+    [],
+  );
+
+  const runMultiAgentCollaboration = useCallback(
+    async (targetProfile: UserProfile, triggerReason?: string) => {
+      setIsSyncingAI(true);
+      try {
+        const res = await fetch('/api/ai/collaborate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile: targetProfile, triggerReason }),
+        });
+        if (res.ok) {
+          const report = (await res.json()) as MultiAgentReport;
+          setAgentReport(report);
+          if (triggerReason && triggerReason !== 'Initial Student Profile Diagnostics') {
+            pushNotification({
+              title: '4-Agent Collaboration Synced',
+              detail: `${triggerReason} — updated market alignment and adaptive curriculum priorities.`,
+              category: 'ai',
+              targetSection: 'skill-analysis',
+            });
+          }
+        }
+      } catch {
+        // Handled silently
+      } finally {
+        setIsSyncingAI(false);
+      }
+    },
+    [pushNotification],
+  );
 
   const updateSettings = (next: AppSettings) => {
     setSettings(next);
@@ -262,7 +300,7 @@ export default function App() {
               CAREER_ROLES.find((r) => r.id === data.targetCareerId)?.title ?? CAREER_ROLES[0].title;
             return buildInitialNotifications(data.name || 'Learner', roleTitle);
           });
-          if (settings.autoSyncAgents) {
+          if (autoSyncAgentsRef.current) {
             runMultiAgentCollaboration(data, 'Restored User Session Diagnostics');
           }
         } else {
@@ -285,8 +323,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userKey, sessionToken]);
+  }, [userKey, sessionToken, runMultiAgentCollaboration]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -377,36 +414,6 @@ export default function App() {
       ),
     [profile.skills, targetRole, profile.remedialSkills, profile.completedModuleIds],
   );
-
-  const runMultiAgentCollaboration = async (
-    targetProfile: UserProfile = profile,
-    triggerReason?: string,
-  ) => {
-    setIsSyncingAI(true);
-    try {
-      const res = await fetch('/api/ai/collaborate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile: targetProfile, triggerReason }),
-      });
-      if (res.ok) {
-        const report = (await res.json()) as MultiAgentReport;
-        setAgentReport(report);
-        if (triggerReason && triggerReason !== 'Initial Student Profile Diagnostics') {
-          pushNotification({
-            title: '4-Agent Collaboration Synced',
-            detail: `${triggerReason} — updated market alignment and adaptive curriculum priorities.`,
-            category: 'ai',
-            targetSection: 'skill-analysis',
-          });
-        }
-      }
-    } catch {
-      // Handled silently
-    } finally {
-      setIsSyncingAI(false);
-    }
-  };
 
   // Multi-agent diagnostics run only after authentication (never on unauthenticated entry)
 
@@ -991,10 +998,13 @@ export default function App() {
                   roles={CAREER_ROLES}
                   match={match}
                   onUpdateProfile={(next) => persistProfile(next)}
-                  onAuthSuccess={handleAuthSuccess}
                   onSignOut={handleSignOut}
                   onResetDemo={handleResetDemo}
                   onVerifySkill={(skillName) => openAuthenticityForSkill(skillName)}
+                  onOpenAuthModal={() => {
+                    setAuthModalReason(undefined);
+                    setAuthModalOpen(true);
+                  }}
                 />
               )}
 

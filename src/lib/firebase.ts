@@ -118,9 +118,9 @@ export async function syncUserWorkspaceToFirestore(
   const userPath = `users/${user.uid}`;
   const privatePath = `users/${user.uid}/private/info`;
 
-  const displayName = (profile.name || user.displayName || 'PathForge Learner').slice(0, 80);
+  const displayName = (profile.name || user.displayName || 'VoraGen Learner').slice(0, 80);
   const headline = (profile.headline || 'Career Readiness Builder').slice(0, 160);
-  const education = (profile.education || 'PathForge Academy').slice(0, 120);
+  const education = (profile.education || 'VoraGen Academy').slice(0, 120);
   const targetCareerId = sanitizeId(profile.targetCareerId || 'fullstack-dev');
   const streakPoints = Math.max(0, Math.min(10000000, Math.round(profile.streakPoints || 0)));
   const streakDays = Math.max(0, Math.min(36500, Math.round(profile.streakDays || 1)));

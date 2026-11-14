@@ -44,6 +44,7 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
     email: string;
     password?: string;
     authProvider: UserProfile['authProvider'];
+    idToken?: string;
   }) => {
     setIsSubmittingAuth(true);
     setAuthError('');
@@ -57,6 +58,7 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
           email: params.email,
           password: params.password,
           authProvider: params.authProvider,
+          idToken: params.idToken,
         }),
       });
       const data = (await res.json()) as {
@@ -86,13 +88,14 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
     setIsSubmittingAuth(true);
     setAuthError('');
     try {
-      const { user } = await signInWithGooglePopup();
+      const { user, idToken } = await signInWithGooglePopup();
       if (user.email) {
         await performServerAuth({
           mode: authTab,
           name: user.displayName || user.email.split('@')[0],
           email: user.email,
           authProvider: 'google',
+          idToken,
         });
         return;
       }

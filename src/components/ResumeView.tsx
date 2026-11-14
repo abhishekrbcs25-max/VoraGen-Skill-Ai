@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Award,
   Check,
@@ -11,6 +11,7 @@ import {
   GraduationCap,
   Plus,
   Printer,
+  Save,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -22,6 +23,7 @@ import {
   draftResumeSummary,
   sortEducationEntries,
 } from '../utils/resumeHelpers';
+import { sanitizeExternalUrl } from '../utils/validation';
 import type { CareerRole, EducationEntry, UserProfile, UserSkill } from '../types';
 
 interface ResumeViewProps {
@@ -39,6 +41,35 @@ export function ResumeView({
   onNotifyUpdate,
   onOpenAuthModal,
 }: ResumeViewProps) {
+  // Draft contact & summary fields so signed-out visitors are never interrupted mid-keystroke
+  const [draftName, setDraftName] = useState(profile.name);
+  const [draftHeadline, setDraftHeadline] = useState(profile.headline);
+  const [draftEmail, setDraftEmail] = useState(profile.email);
+  const [draftPhone, setDraftPhone] = useState(profile.phone || '');
+  const [draftLocation, setDraftLocation] = useState(profile.location || '');
+  const [draftGithubUrl, setDraftGithubUrl] = useState(profile.githubUrl || '');
+  const [draftSummary, setDraftSummary] = useState(profile.resumeSummary || '');
+  const [contactSaved, setContactSaved] = useState(false);
+
+  useEffect(() => {
+    setDraftName(profile.name);
+    setDraftHeadline(profile.headline);
+    setDraftEmail(profile.email);
+    setDraftPhone(profile.phone || '');
+    setDraftLocation(profile.location || '');
+    setDraftGithubUrl(profile.githubUrl || '');
+    setDraftSummary(profile.resumeSummary || '');
+  }, [
+    profile.name,
+    profile.headline,
+    profile.email,
+    profile.phone,
+    profile.location,
+    profile.githubUrl,
+    profile.resumeSummary,
+    profile.isSignedIn,
+  ]);
+
   // Education form
   const [institution, setInstitution] = useState('');
   const [degree, setDegree] = useState('');
@@ -67,17 +98,57 @@ export function ResumeView({
 
   const [copiedMd, setCopiedMd] = useState(false);
 
+  const previewProfile = useMemo<UserProfile>(
+    () => ({
+      ...profile,
+      name: draftName,
+      headline: draftHeadline,
+      email: draftEmail,
+      phone: draftPhone,
+      location: draftLocation,
+      githubUrl: draftGithubUrl,
+      resumeSummary: draftSummary,
+    }),
+    [profile, draftName, draftHeadline, draftEmail, draftPhone, draftLocation, draftGithubUrl, draftSummary],
+  );
+
   const educationHistory = useMemo(
     () => sortEducationEntries(profile.educationHistory || []),
     [profile.educationHistory],
   );
 
-  const completeness = useMemo(() => calculateResumeCompleteness(profile), [profile]);
+  const completeness = useMemo(() => calculateResumeCompleteness(previewProfile), [previewProfile]);
 
   const resumeMarkdown = useMemo(
-    () => buildResumeMarkdown(profile, targetRole.title),
-    [profile, targetRole.title],
+    () => buildResumeMarkdown(previewProfile, targetRole.title),
+    [previewProfile, targetRole.title],
   );
+
+  const updateDraftAndSync = (patch: Partial<UserProfile>) => {
+    const merged: UserProfile = {
+      ...previewProfile,
+      ...patch,
+    };
+    if ('name' in patch) setDraftName(merged.name);
+    if ('headline' in patch) setDraftHeadline(merged.headline);
+    if ('email' in patch) setDraftEmail(merged.email);
+    if ('phone' in patch) setDraftPhone(merged.phone || '');
+    if ('location' in patch) setDraftLocation(merged.location || '');
+    if ('githubUrl' in patch) setDraftGithubUrl(merged.githubUrl || '');
+    if ('resumeSummary' in patch) setDraftSummary(merged.resumeSummary || '');
+    if (profile.isSignedIn) {
+      onUpdateProfile(merged);
+    }
+  };
+
+  const handleSaveContactSummary = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdateProfile(previewProfile);
+    if (!profile.isSignedIn) return;
+    setContactSaved(true);
+    setTimeout(() => setContactSaved(false), 2000);
+    onNotifyUpdate?.('Resume Contact Saved', 'Updated contact header and professional summary.');
+  };
 
   const handleAddEducation = (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,8 +301,9 @@ export function ResumeView({
   };
 
   const handleAutoDraftSummary = () => {
-    const summary = draftResumeSummary(profile, targetRole.title);
-    onUpdateProfile({ ...profile, resumeSummary: summary });
+    const summary = draftResumeSummary(previewProfile, targetRole.title);
+    setDraftSummary(summary);
+    onUpdateProfile({ ...previewProfile, resumeSummary: summary });
   };
 
   return (
@@ -349,7 +421,10 @@ export function ResumeView({
         {/* Left: Structured Resume Input Forms */}
         <div className="no-print xl:col-span-6 space-y-6">
           {/* 1. Personal Details & Career Summary */}
-          <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4">
+          <form
+            onSubmit={handleSaveContactSummary}
+            className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4"
+          >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <User className="w-5 h-5 text-red-600 dark:text-blue-400" />
@@ -375,8 +450,8 @@ export function ResumeView({
                 <input
                   id="res-name"
                   type="text"
-                  value={profile.name}
-                  onChange={(e) => onUpdateProfile({ ...profile, name: e.target.value })}
+                  value={draftName}
+                  onChange={(e) => updateDraftAndSync({ name: e.target.value })}
                   className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
               </div>
@@ -387,8 +462,8 @@ export function ResumeView({
                 <input
                   id="res-headline"
                   type="text"
-                  value={profile.headline}
-                  onChange={(e) => onUpdateProfile({ ...profile, headline: e.target.value })}
+                  value={draftHeadline}
+                  onChange={(e) => updateDraftAndSync({ headline: e.target.value })}
                   placeholder={`e.g., ${targetRole.title}`}
                   className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
@@ -400,8 +475,8 @@ export function ResumeView({
                 <input
                   id="res-email"
                   type="email"
-                  value={profile.email}
-                  onChange={(e) => onUpdateProfile({ ...profile, email: e.target.value })}
+                  value={draftEmail}
+                  onChange={(e) => updateDraftAndSync({ email: e.target.value })}
                   className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
               </div>
@@ -412,8 +487,8 @@ export function ResumeView({
                 <input
                   id="res-phone"
                   type="tel"
-                  value={profile.phone || ''}
-                  onChange={(e) => onUpdateProfile({ ...profile, phone: e.target.value })}
+                  value={draftPhone}
+                  onChange={(e) => updateDraftAndSync({ phone: e.target.value })}
                   placeholder="+1 555 010 2026"
                   className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
@@ -425,8 +500,8 @@ export function ResumeView({
                 <input
                   id="res-location"
                   type="text"
-                  value={profile.location || ''}
-                  onChange={(e) => onUpdateProfile({ ...profile, location: e.target.value })}
+                  value={draftLocation}
+                  onChange={(e) => updateDraftAndSync({ location: e.target.value })}
                   placeholder="Bengaluru, India · Remote"
                   className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
@@ -438,8 +513,8 @@ export function ResumeView({
                 <input
                   id="res-github"
                   type="text"
-                  value={profile.githubUrl || ''}
-                  onChange={(e) => onUpdateProfile({ ...profile, githubUrl: e.target.value })}
+                  value={draftGithubUrl}
+                  onChange={(e) => updateDraftAndSync({ githubUrl: e.target.value })}
                   placeholder="https://github.com/username"
                   className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
@@ -453,13 +528,29 @@ export function ResumeView({
               <textarea
                 id="res-summary"
                 rows={3}
-                value={profile.resumeSummary || ''}
-                onChange={(e) => onUpdateProfile({ ...profile, resumeSummary: e.target.value })}
+                value={draftSummary}
+                onChange={(e) => updateDraftAndSync({ resumeSummary: e.target.value })}
                 placeholder="Write a concise 2–3 sentence summary highlighting your education, verified skills, and project impact..."
                 className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
               />
             </div>
-          </section>
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors"
+              >
+                {contactSaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                <span>
+                  {contactSaved
+                    ? 'Contact & Summary Saved'
+                    : profile.isSignedIn
+                      ? 'Save Contact & Summary'
+                      : 'Save Contact & Summary (Requires Sign In)'}
+                </span>
+              </button>
+            </div>
+          </form>
 
           {/* 2. Educational Background */}
           <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4">
@@ -856,32 +947,37 @@ export function ResumeView({
             {/* Resume Header */}
             <header className="border-b-2 border-slate-900 pb-4 space-y-1.5">
               <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-950">
-                {profile.name.trim() || 'Your Full Name'}
+                {previewProfile.name.trim() || 'Your Full Name'}
               </h2>
               <p className="text-sm font-semibold text-red-700">
-                {profile.headline.trim() || targetRole.title}
+                {previewProfile.headline.trim() || targetRole.title}
               </p>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600 pt-1">
-                {profile.email && <span>{profile.email}</span>}
-                {profile.phone && <span>· {profile.phone}</span>}
-                {profile.location && <span>· {profile.location}</span>}
-                {profile.githubUrl && (
-                  <span className="inline-flex items-center gap-1 text-slate-800 font-medium">
-                    · {profile.githubUrl}
+                {previewProfile.email && <span>{previewProfile.email}</span>}
+                {previewProfile.phone && <span>· {previewProfile.phone}</span>}
+                {previewProfile.location && <span>· {previewProfile.location}</span>}
+                {sanitizeExternalUrl(previewProfile.githubUrl) && (
+                  <a
+                    href={sanitizeExternalUrl(previewProfile.githubUrl)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-slate-800 font-medium hover:underline"
+                  >
+                    · {sanitizeExternalUrl(previewProfile.githubUrl)}
                     <ExternalLink className="w-3 h-3 no-print" />
-                  </span>
+                  </a>
                 )}
               </div>
             </header>
 
             {/* Summary */}
-            {profile.resumeSummary?.trim() && (
+            {previewProfile.resumeSummary?.trim() && (
               <section className="space-y-1.5">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 pb-1">
                   Professional Summary
                 </h3>
                 <p className="text-xs sm:text-[13px] text-slate-700 leading-relaxed">
-                  {profile.resumeSummary.trim()}
+                  {previewProfile.resumeSummary.trim()}
                 </p>
               </section>
             )}
@@ -957,10 +1053,15 @@ export function ResumeView({
                     <div key={proj.id} className="space-y-0.5">
                       <div className="flex items-baseline justify-between gap-2">
                         <p className="text-sm font-bold text-slate-950">{proj.title}</p>
-                        {proj.repoUrl && (
-                          <span className="text-[11px] font-mono text-slate-500 truncate max-w-[200px]">
-                            {proj.repoUrl}
-                          </span>
+                        {sanitizeExternalUrl(proj.repoUrl) && (
+                          <a
+                            href={sanitizeExternalUrl(proj.repoUrl)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] font-mono text-slate-500 hover:underline truncate max-w-[200px]"
+                          >
+                            {sanitizeExternalUrl(proj.repoUrl)}
+                          </a>
                         )}
                       </div>
                       <p className="text-xs text-slate-700 leading-relaxed">{proj.description}</p>

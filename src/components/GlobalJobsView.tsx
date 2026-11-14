@@ -17,6 +17,7 @@ import {
   queryGlobalCompanies,
 } from '../data/companiesCatalog';
 import { calculateJobSkillMatchPct } from '../utils/skillEngine';
+import { sanitizeExternalUrl } from '../utils/validation';
 import { EmployerMapExplorer } from './EmployerMapExplorer';
 import type { CompanyJob, UserProfile } from '../types';
 
@@ -324,7 +325,7 @@ export function GlobalJobsView({
                 <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                   <Globe className="w-4 h-4 text-slate-500 shrink-0" />
                   <a
-                    href={activeCompany.website}
+                    href={sanitizeExternalUrl(activeCompany.website) ?? '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="truncate hover:underline text-blue-600 dark:text-blue-400"
@@ -336,7 +337,7 @@ export function GlobalJobsView({
 
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <a
-                  href={activeCompany.careersUrl}
+                  href={sanitizeExternalUrl(activeCompany.careersUrl) ?? '#'}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() =>

@@ -106,7 +106,7 @@ export function DailyProductivityHeatmap({
             </div>
 
             {/* Week columns */}
-            <div className="flex gap-1.5" role="grid" aria-label="30-day contribution matrix">
+            <div className="flex gap-1.5" role="group" aria-label="30-day contribution matrix">
               {weekColumns.map((col, colIdx) => (
                 <div key={`week-${colIdx}`} className="grid grid-rows-7 gap-1.5">
                   {col.map((day, rowIdx) => {
@@ -180,6 +180,7 @@ export function DailyProductivityHeatmap({
                     onMouseEnter={() => setSelectedDate(day.date)}
                     onClick={() => setSelectedDate(day.date)}
                     aria-label={`Inspect ${day.label}`}
+                    aria-pressed={isSelected}
                     className={`h-7 rounded-md border text-[10px] font-mono tabular-nums flex items-center justify-center transition-all ${
                       INTENSITY_CLASSES[day.intensity]
                     } ${
