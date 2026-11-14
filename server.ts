@@ -8,7 +8,6 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { GoogleGenAI, Modality, ThinkingLevel, Type } from '@google/genai';
 import {
   CAREER_ROLES,
-  INITIAL_SAMPLE_PROFILE,
   LEARNING_CATALOG,
   MENTOR_STAFF,
   createFreshUserProfile,
@@ -22,6 +21,12 @@ import {
   type InteractionStepLike,
   type ThinkingPreset,
 } from './src/utils/aiHelpers.ts';
+import {
+  buildProfileCollaborationKey,
+  ModelCooldownTracker,
+  TtlResponseCache,
+  type GeminiTextModel,
+} from './src/utils/geminiResilience.ts';
 import { requireAuth, type AuthRequest } from './src/middleware/auth.ts';
 import {
   getOrCreateUser,
@@ -42,16 +47,14 @@ function ensureDataStore(): Record<string, UserProfile> {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     if (!fs.existsSync(PROFILE_FILE)) {
-      const initial: Record<string, UserProfile> = {
-        default: INITIAL_SAMPLE_PROFILE,
-      };
+      const initial: Record<string, UserProfile> = {};
       fs.writeFileSync(PROFILE_FILE, JSON.stringify(initial, null, 2));
       return initial;
     }
     const raw = fs.readFileSync(PROFILE_FILE, 'utf-8');
     return JSON.parse(raw) as Record<string, UserProfile>;
   } catch {
-    return { default: INITIAL_SAMPLE_PROFILE };
+    return {};
   }
 }
 
@@ -64,6 +67,13 @@ function saveDataStore(store: Record<string, UserProfile>): void {
   } catch {
     // Non-fatal in read-only sandboxes
   }
+}
+
+const modelCooldowns = new ModelCooldownTracker();
+const collaborateCache = new TtlResponseCache<MultiAgentReport>(10 * 60_000, 40);
+
+function getThinkingForModel(model: GeminiTextModel): ThinkingLevel {
+  return model === 'gemini-3.1-flash-lite' ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW;
 }
 
 function getGeminiClient(): GoogleGenAI | null {
@@ -135,16 +145,23 @@ async function startServer() {
     res.json({ hasKey: Boolean(apiKey), apiKey });
   });
 
-  // Get active learner profile (local/guest JSON store)
+  // Get active authenticated learner profile (no default/sample profile exposed)
   app.get('/api/profile', (req, res) => {
-    const key = typeof req.query.key === 'string' ? req.query.key : 'default';
-    const profile = profileStore[key] || INITIAL_SAMPLE_PROFILE;
-    res.json(profile);
+    const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
+    if (!key || key === 'default' || !profileStore[key]) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    res.json(profileStore[key]);
   });
 
-  // Persist learner profile updates
+  // Persist learner profile updates (authenticated users only)
   app.put('/api/profile', (req, res) => {
-    const key = typeof req.query.key === 'string' ? req.query.key : 'default';
+    const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
+    if (!key || key === 'default') {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
     const body = req.body as UserProfile;
     if (!body || typeof body.name !== 'string') {
       res.status(400).json({ error: 'Invalid profile payload' });
@@ -155,17 +172,21 @@ async function startServer() {
     res.json({ ok: true, profile: body });
   });
 
-  // Reset to initial sample scenario (for guest demo)
+  // Clear signed-in user workspace back to a clean empty profile
   app.post('/api/profile/reset', (req, res) => {
-    const key = typeof req.query.key === 'string' && req.query.key ? req.query.key : 'default';
-    const fresh =
-      key === 'default'
-        ? INITIAL_SAMPLE_PROFILE
-        : createFreshUserProfile({
-            name: profileStore[key]?.name || 'Learner',
-            email: key,
-            authProvider: profileStore[key]?.authProvider || 'email',
-          });
+    const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
+    if (!key || key === 'default') {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    const fresh = {
+      ...createFreshUserProfile({
+        name: profileStore[key]?.name || 'Learner',
+        email: key,
+        authProvider: profileStore[key]?.authProvider || 'email',
+      }),
+      needsOnboarding: false,
+    };
     profileStore[key] = fresh;
     saveDataStore(profileStore);
     res.json({ ok: true, profile: fresh });
@@ -322,16 +343,18 @@ Missing skills: ${match.missingSkillNames.join(', ') || 'None'}.`
 Give clear, accurate, actionable guidance with code examples or concrete study steps when relevant.`;
 
     const ai = getGeminiClient();
-    if (ai) {
+    const activeModel = ai ? modelCooldowns.pickAvailableModel(selectedModel) : null;
+    if (ai && activeModel) {
+      const resolvedActiveThinking = normalizeThinkingLevel(activeModel, thinkingLevel);
       try {
         const interaction = await withTimeout(
           ai.interactions.create({
-            model: selectedModel,
+            model: activeModel,
             input: message.trim(),
             previous_interaction_id: previousInteractionId || undefined,
             system_instruction: previousInteractionId ? undefined : systemInstruction,
             generation_config: {
-              thinking_level: resolvedThinking as never,
+              thinking_level: resolvedActiveThinking as never,
               thinking_summaries: 'auto',
             },
           }),
@@ -346,22 +369,22 @@ Give clear, accurate, actionable guidance with code examples or concrete study s
           reply,
           thoughtSummary,
           interactionId: interaction.id,
-          modelUsed: selectedModel,
-          thinkingLevel: resolvedThinking,
+          modelUsed: activeModel,
+          thinkingLevel: resolvedActiveThinking,
           source: 'gemini-interactions',
         });
         return;
       } catch (err) {
+        modelCooldowns.recordError(activeModel, err);
         const formatted = formatGeminiError(err);
-        if (formatted.needsPaidKey) {
-          res.status(formatted.status).json({ error: formatted.message, needsPaidKey: true });
+        if (formatted.status === 403) {
+          res.status(403).json({ error: formatted.message, needsPaidKey: true });
           return;
         }
-        console.warn('Interactions chat fallback:', formatted.message);
       }
     }
 
-    // Grounded career coach fallback when GEMINI_API_KEY is unset
+    // Grounded adaptive career coach fallback when GEMINI_API_KEY is unset or quota is cooling down
     const nextGap = match?.missingSkillNames[0] || targetRole.requiredSkills[0]?.name || 'React';
     const fallbackReply = `Focusing on **${targetRole.title}**${match ? ` (currently ${match.overallReadinessPct}% ready)` : ''}: prioritize **${nextGap}** next. Break your session into 20 minutes of core concept mastery, 1 interactive Skill Analysis check, and 2 Code Arena problems targeting ${nextGap}.`;
     res.json({
@@ -394,14 +417,15 @@ Give clear, accurate, actionable guidance with code examples or concrete study s
     if (tools.length === 0) tools.push({ type: 'google_search' });
 
     const ai = getGeminiClient();
-    if (ai) {
+    const searchModel = ai ? modelCooldowns.pickAvailableModel('gemini-4-hydrogen') : null;
+    if (ai && searchModel) {
       try {
         const prompt = cityHint
           ? `${query.trim()}\nFocus location context: ${cityHint}`
           : query.trim();
         const interaction = await withTimeout(
           ai.interactions.create({
-            model: 'gemini-4-hydrogen',
+            model: searchModel,
             input: prompt,
             tools: tools as never,
             system_instruction:
@@ -417,17 +441,17 @@ Give clear, accurate, actionable guidance with code examples or concrete study s
         res.json({
           text: text || interaction.output_text || 'No grounded summary returned.',
           sources,
-          modelUsed: 'gemini-4-hydrogen',
+          modelUsed: searchModel,
           source: 'gemini-grounded',
         });
         return;
       } catch (err) {
+        modelCooldowns.recordError(searchModel, err);
         const formatted = formatGeminiError(err);
-        if (formatted.needsPaidKey) {
-          res.status(formatted.status).json({ error: formatted.message, needsPaidKey: true });
+        if (formatted.status === 403) {
+          res.status(403).json({ error: formatted.message, needsPaidKey: true });
           return;
         }
-        console.warn('Grounded search fallback:', formatted.message);
       }
     }
 
@@ -479,7 +503,7 @@ Give clear, accurate, actionable guidance with code examples or concrete study s
     }
 
     const ai = getGeminiClient();
-    if (ai) {
+    if (ai && modelCooldowns.isAvailable('gemini-3.5-transcribe')) {
       try {
         const interaction = await withTimeout(
           ai.interactions.create({
@@ -507,18 +531,18 @@ Give clear, accurate, actionable guidance with code examples or concrete study s
         });
         return;
       } catch (err) {
+        modelCooldowns.recordError('gemini-3.5-transcribe', err);
         const formatted = formatGeminiError(err);
-        if (formatted.needsPaidKey) {
-          res.status(formatted.status).json({ error: formatted.message, needsPaidKey: true });
+        if (formatted.status === 403) {
+          res.status(403).json({ error: formatted.message, needsPaidKey: true });
           return;
         }
-        console.warn('Transcribe fallback:', formatted.message);
       }
     }
 
     res.json({
       transcript:
-        'Audio clip received cleanly. Configure GEMINI_API_KEY in AI Studio Settings > Secrets to transcribe spoken recordings with gemini-3.5-transcribe.',
+        'Audio clip received cleanly. Live transcription will resume automatically once API quota refreshes.',
       modelUsed: 'gemini-3.5-transcribe',
       source: 'adaptive-engine',
     });
@@ -537,17 +561,18 @@ Give clear, accurate, actionable guidance with code examples or concrete study s
     }
 
     const ai = getGeminiClient();
-    if (ai) {
+    const evalModel = ai ? modelCooldowns.pickAvailableModel('gemini-4-hydrogen') : null;
+    if (ai && evalModel) {
       try {
         const response = await withTimeout(
           ai.models.generateContent({
-            model: 'gemini-4-hydrogen',
+            model: evalModel,
             contents: `Evaluate this candidate's mock interview answer for a ${roleTitle || 'Software Engineer'} role.
 Question: ${question}
 Candidate Answer: ${answer}
 Score 0-100, list 2 concrete strengths, 2 concrete improvements, and 2-sentence rubric feedback.`,
             config: {
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              thinkingConfig: { thinkingLevel: getThinkingForModel(evalModel) },
               responseMimeType: 'application/json',
               responseSchema: {
                 type: Type.OBJECT,
@@ -573,7 +598,7 @@ Score 0-100, list 2 concrete strengths, 2 concrete improvements, and 2-sentence 
           return;
         }
       } catch (err) {
-        console.warn('Interview eval fallback:', (err as Error).message);
+        modelCooldowns.recordError(evalModel, err);
       }
     }
 
@@ -629,12 +654,21 @@ Score 0-100, list 2 concrete strengths, 2 concrete improvements, and 2-sentence 
       LEARNING_CATALOG,
     );
 
+    const cacheKey = buildProfileCollaborationKey(profile, triggerReason);
+    const cachedReport = collaborateCache.get(cacheKey);
+    if (cachedReport) {
+      res.json(cachedReport);
+      return;
+    }
+
     const lowAssessments = profile.assessments.filter((a) => a.scorePct < 60);
     const ai = getGeminiClient();
+    const isInitialStartupSync = triggerReason === 'Initial Student Profile Diagnostics';
+    const selectedModel =
+      ai && !isInitialStartupSync ? modelCooldowns.pickAvailableModel('gemini-4-hydrogen') : null;
 
-    if (ai) {
-      try {
-        const prompt = `You are coordinating 4 specialized AI agents in Voragen for a learner:
+    if (ai && selectedModel) {
+      const prompt = `You are coordinating 4 specialized AI agents in Voragen for a learner:
 Learner Name: ${profile.name}
 Target Career: ${targetRole.title} (${targetRole.domain})
 Current Skills: ${profile.skills.map((s) => `${s.name} (${s.level}%)`).join(', ')}
@@ -652,75 +686,85 @@ Produce concise, grounded outputs from the 4 collaborating agents:
 3. Curriculum Architect Agent (Prof. Aria Kapoor)
 4. Adaptive Career Mentor Agent (Voragen Coordinator)`;
 
-        const response = await withTimeout(
-          ai.models.generateContent({
-            model: 'gemini-4-hydrogen',
-            contents: prompt,
-            config: {
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  executiveSummary: { type: Type.STRING },
-                  recalibrationNotice: { type: Type.STRING },
-                  steps: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        agentName: { type: Type.STRING },
-                        agentRole: { type: Type.STRING },
-                        summary: { type: Type.STRING },
-                        actionItems: {
-                          type: Type.ARRAY,
-                          items: { type: Type.STRING },
+      const modelsToTry: GeminiTextModel[] =
+        selectedModel === 'gemini-4-hydrogen' && modelCooldowns.isAvailable('gemini-3.1-flash-lite')
+          ? ['gemini-4-hydrogen', 'gemini-3.1-flash-lite']
+          : [selectedModel];
+
+      for (const candidateModel of modelsToTry) {
+        try {
+          const response = await withTimeout(
+            ai.models.generateContent({
+              model: candidateModel,
+              contents: prompt,
+              config: {
+                thinkingConfig: { thinkingLevel: getThinkingForModel(candidateModel) },
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    executiveSummary: { type: Type.STRING },
+                    recalibrationNotice: { type: Type.STRING },
+                    steps: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          agentName: { type: Type.STRING },
+                          agentRole: { type: Type.STRING },
+                          summary: { type: Type.STRING },
+                          actionItems: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING },
+                          },
                         },
                       },
                     },
                   },
                 },
               },
-            },
-          }),
-          7500,
-        );
+            }),
+            7500,
+          );
 
-        const parsed = JSON.parse(response.text || '{}') as {
-          executiveSummary?: string;
-          recalibrationNotice?: string;
-          steps?: Array<{
-            agentName: string;
-            agentRole: string;
-            summary: string;
-            actionItems: string[];
-          }>;
-        };
-
-        if (parsed.steps && parsed.steps.length >= 3) {
-          const report: MultiAgentReport = {
-            generatedAt: new Date().toISOString(),
-            source: 'gemini-4-hydrogen',
-            overallReadinessPct: match.overallReadinessPct,
-            executiveSummary:
-              parsed.executiveSummary ||
-              `Multi-agent analysis complete for ${targetRole.title} (${match.overallReadinessPct}% readiness).`,
-            recalibrationNotice:
-              parsed.recalibrationNotice ||
-              (lowAssessments.length > 0
-                ? `Remedial modules activated for ${lowAssessments.map((a) => a.skillName).join(', ')}.`
-                : undefined),
-            steps: parsed.steps.map((s) => ({
-              ...s,
-              modelUsed: 'gemini-4-hydrogen',
-            })),
-            recommendedModules: roadmap.slice(0, 6),
+          const parsed = JSON.parse(response.text || '{}') as {
+            executiveSummary?: string;
+            recalibrationNotice?: string;
+            steps?: Array<{
+              agentName: string;
+              agentRole: string;
+              summary: string;
+              actionItems: string[];
+            }>;
           };
-          res.json(report);
-          return;
+
+          if (parsed.steps && parsed.steps.length >= 3) {
+            const report: MultiAgentReport = {
+              generatedAt: new Date().toISOString(),
+              source: 'gemini-4-hydrogen',
+              overallReadinessPct: match.overallReadinessPct,
+              executiveSummary:
+                parsed.executiveSummary ||
+                `Multi-agent analysis complete for ${targetRole.title} (${match.overallReadinessPct}% readiness).`,
+              recalibrationNotice:
+                parsed.recalibrationNotice ||
+                (lowAssessments.length > 0
+                  ? `Remedial modules activated for ${lowAssessments.map((a) => a.skillName).join(', ')}.`
+                  : undefined),
+              steps: parsed.steps.map((s) => ({
+                ...s,
+                modelUsed: candidateModel,
+              })),
+              recommendedModules: roadmap.slice(0, 6),
+            };
+            collaborateCache.set(cacheKey, report);
+            res.json(report);
+            return;
+          }
+        } catch (err) {
+          const wasQuota = modelCooldowns.recordError(candidateModel, err);
+          if (!wasQuota) break;
         }
-      } catch (err) {
-        console.warn('Gemini collaborate fallback activated:', (err as Error).message);
       }
     }
 
@@ -739,7 +783,7 @@ Produce concise, grounded outputs from the 4 collaborating agents:
         {
           agentName: 'Skill Profiler Agent',
           agentRole: 'Dr. Elena Vance · Competency Diagnostics',
-          modelUsed: 'gemini-4-hydrogen',
+          modelUsed: 'adaptive-engine',
           summary: `Evaluated ${profile.skills.length} existing skills and ${profile.assessments.length} diagnostic scores. Verified strengths in ${match.strongSkillNames.join(', ') || 'problem solving'}.`,
           actionItems: [
             match.weakSkillNames.length > 0
@@ -751,7 +795,7 @@ Produce concise, grounded outputs from the 4 collaborating agents:
         {
           agentName: 'Market Matcher Agent',
           agentRole: 'Marcus Chen · Role Alignment',
-          modelUsed: 'gemini-4-hydrogen',
+          modelUsed: 'adaptive-engine',
           summary: `Compared profile against ${targetRole.title} (${targetRole.demandGrowth}, ${targetRole.salaryRange}). Missing ${match.missingSkillNames.length} required competencies.`,
           actionItems: [
             match.missingSkillNames.length > 0
@@ -763,14 +807,14 @@ Produce concise, grounded outputs from the 4 collaborating agents:
         {
           agentName: 'Curriculum Architect Agent',
           agentRole: 'Prof. Aria Kapoor · Adaptive Pathing',
-          modelUsed: 'gemini-4-hydrogen',
+          modelUsed: 'adaptive-engine',
           summary: `Sequenced ${roadmap.length} personalized modules placing ${profile.remedialSkills.length > 0 ? 'remedial bootcamps first' : 'highest-weight skill gaps first'}.`,
           actionItems: roadmap.slice(0, 3).map((m) => `${m.priority}: ${m.title} (${m.durationHours}h)`),
         },
         {
           agentName: 'Career Mentor Coordinator',
           agentRole: 'Voragen Adaptive Guidance',
-          modelUsed: 'gemini-4-hydrogen',
+          modelUsed: 'adaptive-engine',
           summary: `Recommended daily cadence: 1 AI Video Lesson + 2 Code Arena challenges to extend your ${profile.streakDays}-day streak.`,
           actionItems: [
             'Complete next Skill Analysis quiz to validate progress.',
@@ -781,6 +825,7 @@ Produce concise, grounded outputs from the 4 collaborating agents:
       recommendedModules: roadmap.slice(0, 6),
     };
 
+    collaborateCache.set(cacheKey, report);
     res.json(report);
   });
 
@@ -809,37 +854,45 @@ Produce concise, grounded outputs from the 4 collaborating agents:
     );
 
     const ai = getGeminiClient();
-    if (ai) {
-      try {
-        const recentHistory = (history || [])
-          .slice(-4)
-          .map((h) => `${h.role === 'user' ? 'Learner' : mentor.name}: ${h.text}`)
-          .join('\n');
+    const mentorModel = ai ? modelCooldowns.pickAvailableModel('gemini-4-hydrogen') : null;
+    if (ai && mentorModel) {
+      const recentHistory = (history || [])
+        .slice(-4)
+        .map((h) => `${h.role === 'user' ? 'Learner' : mentor.name}: ${h.text}`)
+        .join('\n');
+      const modelsToTry: GeminiTextModel[] =
+        mentorModel === 'gemini-4-hydrogen' && modelCooldowns.isAvailable('gemini-3.1-flash-lite')
+          ? ['gemini-4-hydrogen', 'gemini-3.1-flash-lite']
+          : [mentorModel];
 
-        const response = await withTimeout(
-          ai.models.generateContent({
-            model: 'gemini-4-hydrogen',
-            contents: `${recentHistory ? recentHistory + '\n' : ''}Learner: ${message}`,
-            config: {
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-              systemInstruction: `You are ${mentor.name}, ${mentor.role} at Voragen. Specialty: ${mentor.specialty}.
+      for (const candidateModel of modelsToTry) {
+        try {
+          const response = await withTimeout(
+            ai.models.generateContent({
+              model: candidateModel,
+              contents: `${recentHistory ? recentHistory + '\n' : ''}Learner: ${message}`,
+              config: {
+                thinkingConfig: { thinkingLevel: getThinkingForModel(candidateModel) },
+                systemInstruction: `You are ${mentor.name}, ${mentor.role} at Voragen. Specialty: ${mentor.specialty}.
 You are mentoring ${profile.name} who wants to become a ${targetRole.title}.
 Current readiness: ${match.overallReadinessPct}%.
 Current skills: ${profile.skills.map((s) => `${s.name} (${s.level}%)`).join(', ')}.
 Missing skills: ${match.missingSkillNames.join(', ') || 'None'}.
 Remedial skills needing care: ${profile.remedialSkills.join(', ') || 'None'}.
 Give practical, encouraging, technically accurate advice in 3-5 concise sentences with concrete next steps.`,
-            },
-          }),
-          7500,
-        );
+              },
+            }),
+            7500,
+          );
 
-        if (response.text) {
-          res.json({ reply: response.text.trim(), mentorName: mentor.name, source: 'gemini-4-hydrogen' });
-          return;
+          if (response.text) {
+            res.json({ reply: response.text.trim(), mentorName: mentor.name, source: candidateModel });
+            return;
+          }
+        } catch (err) {
+          const wasQuota = modelCooldowns.recordError(candidateModel, err);
+          if (!wasQuota) break;
         }
-      } catch (err) {
-        console.warn('Gemini mentor chat fallback:', (err as Error).message);
       }
     }
 
@@ -864,61 +917,70 @@ Give practical, encouraging, technically accurate advice in 3-5 concise sentence
 
     const mentor = MENTOR_STAFF.find((m) => m.id === mentorId) ?? MENTOR_STAFF[0];
     const ai = getGeminiClient();
+    const videoModel = ai ? modelCooldowns.pickAvailableModel('gemini-4-hydrogen') : null;
 
-    if (ai) {
-      try {
-        const response = await withTimeout(
-          ai.models.generateContent({
-            model: 'gemini-4-hydrogen',
-            contents: `Create a crisp 4-scene interactive AI video lesson on "${topic}" tailored for a learner aiming to become a ${targetRoleTitle || 'Full Stack Developer'}, presented by ${mentor.name}. Each scene needs a title, concise spoken narration (2 sentences), a visualDiagramTitle, a short practical codeSnippet (4-8 lines), and a 1-line keyTakeaway.`,
-            config: {
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  scenes: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        sceneNumber: { type: Type.INTEGER },
-                        title: { type: Type.STRING },
-                        narration: { type: Type.STRING },
-                        visualDiagramTitle: { type: Type.STRING },
-                        codeSnippet: { type: Type.STRING },
-                        keyTakeaway: { type: Type.STRING },
-                        durationSec: { type: Type.INTEGER },
+    if (ai && videoModel) {
+      const modelsToTry: GeminiTextModel[] =
+        videoModel === 'gemini-4-hydrogen' && modelCooldowns.isAvailable('gemini-3.1-flash-lite')
+          ? ['gemini-4-hydrogen', 'gemini-3.1-flash-lite']
+          : [videoModel];
+
+      for (const candidateModel of modelsToTry) {
+        try {
+          const response = await withTimeout(
+            ai.models.generateContent({
+              model: candidateModel,
+              contents: `Create a crisp 4-scene interactive AI video lesson on "${topic}" tailored for a learner aiming to become a ${targetRoleTitle || 'Full Stack Developer'}, presented by ${mentor.name}. Each scene needs a title, concise spoken narration (2 sentences), a visualDiagramTitle, a short practical codeSnippet (4-8 lines), and a 1-line keyTakeaway.`,
+              config: {
+                thinkingConfig: { thinkingLevel: getThinkingForModel(candidateModel) },
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    scenes: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          sceneNumber: { type: Type.INTEGER },
+                          title: { type: Type.STRING },
+                          narration: { type: Type.STRING },
+                          visualDiagramTitle: { type: Type.STRING },
+                          codeSnippet: { type: Type.STRING },
+                          keyTakeaway: { type: Type.STRING },
+                          durationSec: { type: Type.INTEGER },
+                        },
                       },
                     },
                   },
                 },
               },
-            },
-          }),
-          7500,
-        );
+            }),
+            7500,
+          );
 
-        const parsed = JSON.parse(response.text || '{}') as { scenes?: AIVideoLesson['scenes'] };
-        if (parsed.scenes && parsed.scenes.length >= 3) {
-          const totalDurationSec = parsed.scenes.reduce((acc, s) => acc + (s.durationSec || 18), 0);
-          const lesson: AIVideoLesson = {
-            id: `vid-${Date.now()}`,
-            topic,
-            targetRole: targetRoleTitle,
-            mentorName: mentor.name,
-            totalDurationSec,
-            scenes: parsed.scenes.map((s, idx) => ({
-              ...s,
-              sceneNumber: idx + 1,
-              durationSec: s.durationSec || 18,
-            })),
-          };
-          res.json(lesson);
-          return;
+          const parsed = JSON.parse(response.text || '{}') as { scenes?: AIVideoLesson['scenes'] };
+          if (parsed.scenes && parsed.scenes.length >= 3) {
+            const totalDurationSec = parsed.scenes.reduce((acc, s) => acc + (s.durationSec || 18), 0);
+            const lesson: AIVideoLesson = {
+              id: `vid-${Date.now()}`,
+              topic,
+              targetRole: targetRoleTitle,
+              mentorName: mentor.name,
+              totalDurationSec,
+              scenes: parsed.scenes.map((s, idx) => ({
+                ...s,
+                sceneNumber: idx + 1,
+                durationSec: s.durationSec || 18,
+              })),
+            };
+            res.json(lesson);
+            return;
+          }
+        } catch (err) {
+          const wasQuota = modelCooldowns.recordError(candidateModel, err);
+          if (!wasQuota) break;
         }
-      } catch (err) {
-        console.warn('Gemini video lesson fallback:', (err as Error).message);
       }
     }
 
@@ -1142,7 +1204,8 @@ Give practical, encouraging, technically accurate advice in 3-5 concise sentence
     if (
       req.path === '/' ||
       req.path.endsWith('.html') ||
-      req.path === '/favicon.svg'
+      req.path === '/favicon.svg' ||
+      req.path === '/favicon.ico'
     ) {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       res.setHeader('Pragma', 'no-cache');

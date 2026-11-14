@@ -111,7 +111,7 @@ export function HomeView({
         >
           <div>
             <p className="text-xs font-medium text-red-700 dark:text-amber-400">
-              {profile.name} · Target: {targetRole.title} · {targetRole.demandGrowth}
+              {profile.name || 'Guest Visitor'} · Target: {targetRole.title} · {targetRole.demandGrowth}
             </p>
             <h1 className="mt-3 font-display text-3xl sm:text-4xl font-bold tracking-tight text-slate-950 dark:text-white leading-[1.12]">
               Turn today’s missing skills into your next career breakthrough.

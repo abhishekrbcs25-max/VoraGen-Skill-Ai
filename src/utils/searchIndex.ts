@@ -39,6 +39,14 @@ const STATIC_ENTRIES: SearchEntry[] = [
     targetSection: 'profile',
   },
   {
+    id: 'nav-resume',
+    label: 'Resume Builder & CV Studio',
+    category: 'Navigation',
+    description: 'Create and export your resume with educational background, skills gained, projects, and certifications',
+    keywords: ['resume', 'cv', 'education', 'degree', 'skills', 'projects', 'certifications', 'pdf', 'print', 'export'],
+    targetSection: 'resume',
+  },
+  {
     id: 'nav-skill-analysis',
     label: 'Skill Analysis & Multi-Agent Diagnostics',
     category: 'Navigation',

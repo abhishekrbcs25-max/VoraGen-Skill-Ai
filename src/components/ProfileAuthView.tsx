@@ -291,13 +291,15 @@ Projects: ${profile.projects.map((p) => `${p.title}: ${p.description}`).join('; 
             <span>{copiedReadme ? 'Copied GitHub Summary' : 'Export GitHub Summary'}</span>
           </button>
 
-          <button
-            type="button"
-            onClick={onResetDemo}
-            className="px-3.5 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-white/15 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
-          >
-            Reset Sample Student
-          </button>
+          {profile.isSignedIn && (
+            <button
+              type="button"
+              onClick={onResetDemo}
+              className="px-3.5 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-white/15 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+            >
+              Clear Workspace
+            </button>
+          )}
 
           {profile.isSignedIn ? (
             <button
@@ -329,19 +331,21 @@ Projects: ${profile.projects.map((p) => `${p.title}: ${p.description}`).join('; 
         <div className="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-red-600/10 dark:bg-blue-500/15 flex items-center justify-center text-red-700 dark:text-blue-400 font-display font-bold text-lg">
-              {profile.name.slice(0, 2).toUpperCase()}
+              {(profile.name.trim() || 'VG').slice(0, 2).toUpperCase()}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
-                  {profile.name}
+                  {profile.isSignedIn ? profile.name : 'Guest Visitor'}
                 </h2>
                 {profile.isSignedIn && (
                   <UserCheck className="w-4 h-4 text-emerald-600 dark:text-amber-400" />
                 )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {profile.email} · {profile.authProvider.toUpperCase()}
+                {profile.isSignedIn
+                  ? `${profile.email} · ${profile.authProvider.toUpperCase()}`
+                  : 'Sign in or create an account to save updates'}
               </p>
             </div>
           </div>

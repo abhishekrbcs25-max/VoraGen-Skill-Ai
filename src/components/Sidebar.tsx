@@ -4,6 +4,7 @@ import {
   Briefcase,
   Code2,
   Compass,
+  FileText,
   Gamepad2,
   GraduationCap,
   HelpCircle,
@@ -29,6 +30,7 @@ interface SidebarProps {
   profile: UserProfile;
   readinessPct: number;
   onOpenSupport: () => void;
+  onOpenAuthModal: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
 }
@@ -36,6 +38,7 @@ interface SidebarProps {
 const NAV_ITEMS: Array<{ id: NavSection; label: string; icon: typeof Home }> = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'profile', label: 'User Profile', icon: User },
+  { id: 'resume', label: 'Resume', icon: FileText },
   { id: 'skill-analysis', label: 'Skill Analysis', icon: Activity },
   { id: 'career-matching', label: 'Career Matching', icon: Target },
   { id: 'learning-recommendations', label: 'Learning Recommendations', icon: GraduationCap },
@@ -56,6 +59,7 @@ export function Sidebar({
   profile,
   readinessPct,
   onOpenSupport,
+  onOpenAuthModal,
   mobileOpen,
   onCloseMobile,
 }: SidebarProps) {
@@ -97,21 +101,25 @@ export function Sidebar({
         <button
           type="button"
           onClick={() => {
-            onSelectSection('profile');
+            if (profile.isSignedIn) {
+              onSelectSection('profile');
+            } else {
+              onOpenAuthModal();
+            }
             onCloseMobile();
           }}
           className="w-full text-left rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#121829] p-3 transition-colors hover:border-red-500/40 dark:hover:border-blue-500/40"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
-              {profile.name}
+              {profile.isSignedIn ? profile.name : 'Guest Visitor'}
             </span>
             <span className="text-xs font-mono font-semibold tabular-nums text-emerald-700 dark:text-amber-400">
               {readinessPct}%
             </span>
           </div>
           <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 truncate">
-            {profile.isSignedIn ? `Signed in (${profile.authProvider})` : 'Guest Demo · Sign in'}
+            {profile.isSignedIn ? `Signed in (${profile.authProvider})` : 'Sign in to update & save'}
           </p>
           <div className="mt-2 h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
             <div

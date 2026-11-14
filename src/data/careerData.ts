@@ -631,6 +631,39 @@ export const DIAGNOSTIC_QUIZZES: Record<string, DiagnosticQuestion[]> = {
   ],
 };
 
+export function createBlankUnauthenticatedProfile(): UserProfile {
+  return {
+    id: '',
+    name: '',
+    email: '',
+    authProvider: 'email',
+    isSignedIn: false,
+    headline: '',
+    education: '',
+    phone: '',
+    location: '',
+    linkedinUrl: '',
+    githubUrl: '',
+    portfolioUrl: '',
+    resumeSummary: '',
+    educationHistory: [],
+    targetCareerId: 'fullstack-dev',
+    careerGoals: [],
+    skills: [],
+    certifications: [],
+    projects: [],
+    assessments: [],
+    completedModuleIds: [],
+    remedialSkills: [],
+    streakDays: 0,
+    streakPoints: 0,
+    solvedChallengeIds: [],
+    gamesWon: 0,
+    applications: [],
+    needsOnboarding: false,
+  };
+}
+
 export function createFreshUserProfile(params: {
   name: string;
   email: string;
@@ -642,8 +675,15 @@ export function createFreshUserProfile(params: {
     email: params.email,
     authProvider: params.authProvider,
     isSignedIn: true,
-    headline: 'New Voragen Learner',
+    headline: 'New VoraGen Learner',
     education: '',
+    phone: '',
+    location: '',
+    linkedinUrl: '',
+    githubUrl: '',
+    portfolioUrl: '',
+    resumeSummary: '',
+    educationHistory: [],
     targetCareerId: 'fullstack-dev',
     careerGoals: [],
     skills: [],

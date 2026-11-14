@@ -6,6 +6,7 @@ import {
   CheckCheck,
   Code2,
   Gamepad2,
+  LogIn,
   Menu,
   Search,
   Settings,
@@ -22,12 +23,14 @@ import type { AppNotification, NavSection, NotificationCategory } from '../types
 interface TopSearchBarProps {
   activeSection: NavSection;
   readinessPct: number;
+  isSignedIn: boolean;
   notifications: AppNotification[];
   onSelectEntry: (entry: SearchEntry) => void;
   onSelectNotification: (notification: AppNotification) => void;
   onMarkAllNotificationsRead: () => void;
   onClearNotifications: () => void;
   onOpenSettings: () => void;
+  onOpenAuthModal: () => void;
   onOpenMobileMenu: () => void;
 }
 
@@ -53,12 +56,14 @@ function getNotificationIcon(category: NotificationCategory) {
 export function TopSearchBar({
   activeSection,
   readinessPct,
+  isSignedIn,
   notifications,
   onSelectEntry,
   onSelectNotification,
   onMarkAllNotificationsRead,
   onClearNotifications,
   onOpenSettings,
+  onOpenAuthModal,
   onOpenMobileMenu,
 }: TopSearchBarProps) {
   const [query, setQuery] = useState('');
@@ -124,7 +129,7 @@ export function TopSearchBar({
   };
 
   return (
-    <div className="sticky top-0 z-20 border-b border-slate-200 dark:border-white/10 bg-white/95 dark:bg-[#07090F]/95 backdrop-blur-xs">
+    <div className="no-print sticky top-0 z-20 border-b border-slate-200 dark:border-white/10 bg-white/95 dark:bg-[#07090F]/95 backdrop-blur-xs">
       <div className="max-w-[1240px] mx-auto px-4 sm:px-8 lg:px-10 py-3 flex items-center justify-between gap-3">
         {/* Mobile Sidebar Drawer Button */}
         <button
@@ -372,6 +377,20 @@ export function TopSearchBar({
               </div>
             )}
           </div>
+
+          {!isSignedIn && (
+            <button
+              type="button"
+              onClick={() => {
+                setNotifOpen(false);
+                onOpenAuthModal();
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors whitespace-nowrap"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </button>
+          )}
 
           <button
             type="button"

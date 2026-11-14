@@ -3,7 +3,9 @@ import { Sidebar } from './components/Sidebar';
 import { TopSearchBar } from './components/TopSearchBar';
 import { SupportModal } from './components/SupportModal';
 import { HomeView } from './components/HomeView';
+import { AuthModal } from './components/AuthModal';
 import { ProfileAuthView } from './components/ProfileAuthView';
+import { ResumeView } from './components/ResumeView';
 import { SkillAnalysisView } from './components/SkillAnalysisView';
 import { CareerMatchingView } from './components/CareerMatchingView';
 import { LearningRecommendationsView } from './components/LearningRecommendationsView';
@@ -16,7 +18,12 @@ import { GlobalJobsView } from './components/GlobalJobsView';
 import { SettingsView } from './components/SettingsView';
 import { OnboardingWizardModal } from './components/OnboardingWizardModal';
 import { SkillArena3DGame } from './components/SkillArena3DGame';
-import { CAREER_ROLES, INITIAL_SAMPLE_PROFILE, LEARNING_CATALOG } from './data/careerData';
+import {
+  CAREER_ROLES,
+  LEARNING_CATALOG,
+  createBlankUnauthenticatedProfile,
+  createFreshUserProfile,
+} from './data/careerData';
 import {
   logAssessmentToFirestore,
   signOutFirebase,
@@ -77,11 +84,20 @@ export default function App() {
   });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalReason, setAuthModalReason] = useState<string | undefined>(undefined);
 
-  const [userKey, setUserKey] = useState<string>(
-    () => localStorage.getItem('pathforge-user-key') || 'default',
+  const [userKey, setUserKey] = useState<string>(() => {
+    const saved = localStorage.getItem('pathforge-user-key') || '';
+    if (!saved || saved === 'default') {
+      localStorage.removeItem('pathforge-user-key');
+      return '';
+    }
+    return saved;
+  });
+  const [profile, setProfile] = useState<UserProfile>(() =>
+    createBlankUnauthenticatedProfile(),
   );
-  const [profile, setProfile] = useState<UserProfile>(INITIAL_SAMPLE_PROFILE);
   const [agentReport, setAgentReport] = useState<MultiAgentReport | null>(null);
   const [isSyncingAI, setIsSyncingAI] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -110,6 +126,7 @@ export default function App() {
   });
 
   const [notifications, setNotifications] = useState<AppNotification[]>(() => {
+    if (!userKey) return [];
     try {
       const saved = localStorage.getItem(`pathforge-notifications-${userKey}`);
       if (saved) {
@@ -117,12 +134,13 @@ export default function App() {
         if (Array.isArray(parsed)) return parsed;
       }
     } catch {
-      // Fallback to initial notifications
+      // Fallback to empty notifications
     }
-    return buildInitialNotifications(INITIAL_SAMPLE_PROFILE.name, CAREER_ROLES[0].title);
+    return [];
   });
 
   useEffect(() => {
+    if (!userKey) return;
     try {
       localStorage.setItem(`pathforge-notifications-${userKey}`, JSON.stringify(notifications));
     } catch {
@@ -180,18 +198,47 @@ export default function App() {
     return () => media.removeEventListener('change', applyTheme);
   }, [themeMode]);
 
-  // Load persisted profile from Express backend on mount
+  // Load persisted profile ONLY when a signed-in userKey exists (zero default data before login)
   useEffect(() => {
+    if (!userKey || userKey === 'default') {
+      setProfile(createBlankUnauthenticatedProfile());
+      setAgentReport(null);
+      return;
+    }
+
+    let cancelled = false;
     fetch(`/api/profile?key=${encodeURIComponent(userKey)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data: UserProfile | null) => {
-        if (data && typeof data.name === 'string') {
+        if (cancelled) return;
+        if (data && data.isSignedIn && typeof data.email === 'string' && data.email) {
           setProfile(data);
+          setNotifications((prev) => {
+            if (prev.length > 0) return prev;
+            const roleTitle =
+              CAREER_ROLES.find((r) => r.id === data.targetCareerId)?.title ?? CAREER_ROLES[0].title;
+            return buildInitialNotifications(data.name || 'Learner', roleTitle);
+          });
+          if (settings.autoSyncAgents) {
+            runMultiAgentCollaboration(data, 'Restored User Session Diagnostics');
+          }
+        } else {
+          localStorage.removeItem('pathforge-user-key');
+          setUserKey('');
+          setProfile(createBlankUnauthenticatedProfile());
         }
       })
       .catch(() => {
-        // Keep initial sample profile seamlessly
+        if (cancelled) return;
+        localStorage.removeItem('pathforge-user-key');
+        setUserKey('');
+        setProfile(createBlankUnauthenticatedProfile());
       });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userKey]);
 
   const showToast = (msg: string) => {
@@ -201,8 +248,24 @@ export default function App() {
     }, 4500);
   };
 
-  const persistProfile = (next: UserProfile, explicitKey?: string) => {
+  const requireSignInForUpdate = (actionLabel = 'update your personal details'): boolean => {
+    if (profile.isSignedIn) return true;
+    setAuthModalReason(`Please sign in or create an account to ${actionLabel}.`);
+    setAuthModalOpen(true);
+    return false;
+  };
+
+  const persistProfile = (
+    next: UserProfile,
+    explicitKey?: string,
+    bypassAuthCheck = false,
+  ) => {
+    if (!bypassAuthCheck && !profile.isSignedIn && !next.isSignedIn) {
+      requireSignInForUpdate('update your profile or resume details');
+      return;
+    }
     const activeKey = explicitKey || userKey;
+    if (!activeKey || activeKey === 'default') return;
     setProfile(next);
     fetch(`/api/profile?key=${encodeURIComponent(activeKey)}`, {
       method: 'PUT',
@@ -293,13 +356,10 @@ export default function App() {
     }
   };
 
-  // Run initial multi-agent collaboration once on startup
-  useEffect(() => {
-    runMultiAgentCollaboration(INITIAL_SAMPLE_PROFILE, 'Initial Student Profile Diagnostics');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Multi-agent diagnostics run only after authentication (never on unauthenticated entry)
 
   const handleSelectCareerGoal = (roleId: string) => {
+    if (!requireSignInForUpdate('save your target career goal')) return;
     const chosen = CAREER_ROLES.find((r) => r.id === roleId);
     if (!chosen) return;
     const next: UserProfile = {
@@ -321,6 +381,7 @@ export default function App() {
   };
 
   const handleAssessmentSubmit = (skillName: string, scorePct: number) => {
+    if (!requireSignInForUpdate('save your skill assessment score')) return;
     const outcome = recalibrateFromAssessment(
       profile,
       skillName,
@@ -378,6 +439,7 @@ export default function App() {
   };
 
   const handleToggleCompleteModule = (moduleId: string, skillName: string) => {
+    if (!requireSignInForUpdate('save your learning roadmap progress')) return;
     const alreadyDone = profile.completedModuleIds.includes(moduleId);
     const nextCompleted = alreadyDone
       ? profile.completedModuleIds.filter((id) => id !== moduleId)
@@ -424,6 +486,7 @@ export default function App() {
   };
 
   const handleSolveChallenge = (challengeId: string, difficulty: Difficulty) => {
+    if (!requireSignInForUpdate('save coding streak points')) return;
     const update = computeCodingStreakUpdate(
       profile.streakPoints,
       profile.streakDays,
@@ -451,6 +514,7 @@ export default function App() {
   };
 
   const handleWinGame = () => {
+    if (!requireSignInForUpdate('save arcade victory points')) return;
     const nextProfile: UserProfile = {
       ...profile,
       gamesWon: profile.gamesWon + 1,
@@ -467,6 +531,7 @@ export default function App() {
   };
 
   const handleWin3DGame = (score: number) => {
+    if (!requireSignInForUpdate('save 3D Skill Defender points')) return;
     if (score > best3DScore) {
       setBest3DScore(score);
       localStorage.setItem('pathforge-3d-best', String(score));
@@ -487,6 +552,7 @@ export default function App() {
   };
 
   const handleApplyForJob = (company: CompanyJob, matchPct: number) => {
+    if (!requireSignInForUpdate('log a job application to your account')) return;
     if (profile.applications.some((a) => a.companyId === company.id)) return;
     const status = matchPct >= 75 ? 'Interview Ready' : 'Assessment Pending';
     const nextProfile: UserProfile = {
@@ -516,19 +582,35 @@ export default function App() {
   };
 
   const handleResetDemo = () => {
-    localStorage.setItem('pathforge-user-key', 'default');
-    setUserKey('default');
-    fetch('/api/profile/reset?key=default', { method: 'POST' })
+    if (!userKey) return;
+    fetch(`/api/profile/reset?key=${encodeURIComponent(userKey)}`, { method: 'POST' })
       .then((res) => res.json())
       .then((data: { profile?: UserProfile }) => {
-        const resetProf = data.profile || INITIAL_SAMPLE_PROFILE;
+        const resetProf =
+          data.profile ||
+          ({
+            ...createFreshUserProfile({
+              name: profile.name || 'Learner',
+              email: profile.email || userKey,
+              authProvider: profile.authProvider || 'email',
+            }),
+            needsOnboarding: false,
+          } satisfies UserProfile);
         setProfile(resetProf);
         setNotifications(buildInitialNotifications(resetProf.name, CAREER_ROLES[0].title));
-        runMultiAgentCollaboration(resetProf, 'Reset to Sample Student Profile');
-        showToast('Reset to Sample Full Stack Student profile.');
+        runMultiAgentCollaboration(resetProf, 'Workspace Cleared');
+        showToast('Workspace cleared back to a clean personal slate.');
       })
       .catch(() => {
-        setProfile(INITIAL_SAMPLE_PROFILE);
+        const resetProf: UserProfile = {
+          ...createFreshUserProfile({
+            name: profile.name || 'Learner',
+            email: profile.email || userKey,
+            authProvider: profile.authProvider || 'email',
+          }),
+          needsOnboarding: false,
+        };
+        setProfile(resetProf);
       });
   };
 
@@ -536,6 +618,8 @@ export default function App() {
     localStorage.setItem('pathforge-user-key', nextKey);
     setUserKey(nextKey);
     setProfile(nextProfile);
+    setAuthModalOpen(false);
+    setAuthModalReason(undefined);
     const activeRole =
       CAREER_ROLES.find((r) => r.id === nextProfile.targetCareerId) ?? CAREER_ROLES[0];
     setNotifications(buildInitialNotifications(nextProfile.name, activeRole.title));
@@ -560,7 +644,7 @@ export default function App() {
   };
 
   const handleCompleteOnboarding = (updated: UserProfile) => {
-    persistProfile(updated, userKey);
+    persistProfile(updated, userKey, true);
     runMultiAgentCollaboration(updated, 'Fresh User Onboarding Completed');
     showToast(`Fresh profile saved for ${updated.name}! AI roadmap personalized.`);
     pushNotification({
@@ -573,27 +657,23 @@ export default function App() {
 
   const handleSkipOnboarding = () => {
     const updated: UserProfile = { ...profile, needsOnboarding: false };
-    persistProfile(updated, userKey);
+    persistProfile(updated, userKey, true);
     runMultiAgentCollaboration(updated, 'New Account Workspace Ready');
   };
 
   const handleSignOut = () => {
     signOutFirebase().catch(() => {});
-    localStorage.setItem('pathforge-user-key', 'default');
-    setUserKey('default');
-    fetch('/api/profile?key=default')
-      .then((res) => (res.ok ? res.json() : INITIAL_SAMPLE_PROFILE))
-      .then((data: UserProfile) => {
-        setProfile(data);
-        runMultiAgentCollaboration(data, 'Switched to Guest Demo');
-        showToast('Signed out cleanly. Switched back to Guest Demo.');
-      })
-      .catch(() => {
-        setProfile(INITIAL_SAMPLE_PROFILE);
-      });
+    localStorage.removeItem('pathforge-user-key');
+    setUserKey('');
+    setProfile(createBlankUnauthenticatedProfile());
+    setAgentReport(null);
+    setNotifications([]);
+    setShow3DGame(false);
+    showToast('Signed out cleanly. Viewing public mode with zero saved user data.');
   };
 
   const handleVerifySkillAuthenticity = (result: SkillAuthenticityResult) => {
+    if (!requireSignInForUpdate('save verified skill results')) return;
     const existingIdx = profile.skills.findIndex(
       (s) => s.name.toLowerCase() === result.skillName.toLowerCase(),
     );
@@ -711,12 +791,23 @@ export default function App() {
 
   if (show3DGame) {
     return (
-      <SkillArena3DGame
-        bestScoreInitial={best3DScore}
-        autostart={initialQueryParams.autostart}
-        onWin={handleWin3DGame}
-        onExit={() => setShow3DGame(false)}
-      />
+      <>
+        <SkillArena3DGame
+          bestScoreInitial={best3DScore}
+          autostart={initialQueryParams.autostart}
+          onWin={handleWin3DGame}
+          onExit={() => setShow3DGame(false)}
+        />
+        <AuthModal
+          open={authModalOpen}
+          reason={authModalReason}
+          onClose={() => {
+            setAuthModalOpen(false);
+            setAuthModalReason(undefined);
+          }}
+          onAuthSuccess={handleAuthSuccess}
+        />
+      </>
     );
   }
 
@@ -735,6 +826,10 @@ export default function App() {
         profile={profile}
         readinessPct={match.overallReadinessPct}
         onOpenSupport={() => setSupportOpen(true)}
+        onOpenAuthModal={() => {
+          setAuthModalReason(undefined);
+          setAuthModalOpen(true);
+        }}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
       />
@@ -759,6 +854,7 @@ export default function App() {
         <TopSearchBar
           activeSection={activeSection}
           readinessPct={match.overallReadinessPct}
+          isSignedIn={profile.isSignedIn}
           notifications={notifications}
           onSelectEntry={handleSelectSearchEntry}
           onSelectNotification={handleSelectNotification}
@@ -767,6 +863,10 @@ export default function App() {
           }
           onClearNotifications={() => setNotifications([])}
           onOpenSettings={() => handleSidebarSelectSection('settings')}
+          onOpenAuthModal={() => {
+            setAuthModalReason(undefined);
+            setAuthModalOpen(true);
+          }}
           onOpenMobileMenu={() => setMobileNavOpen(true)}
         />
 
@@ -808,6 +908,26 @@ export default function App() {
               onSignOut={handleSignOut}
               onResetDemo={handleResetDemo}
               onVerifySkill={(skillName) => openAuthenticityForSkill(skillName)}
+            />
+          )}
+
+          {activeSection === 'resume' && (
+            <ResumeView
+              profile={profile}
+              targetRole={targetRole}
+              onUpdateProfile={(next) => persistProfile(next)}
+              onNotifyUpdate={(title, detail) =>
+                pushNotification({
+                  title,
+                  detail,
+                  category: 'profile',
+                  targetSection: 'resume',
+                })
+              }
+              onOpenAuthModal={() => {
+                setAuthModalReason(undefined);
+                setAuthModalOpen(true);
+              }}
             />
           )}
 
@@ -920,6 +1040,16 @@ export default function App() {
         roles={CAREER_ROLES}
         onComplete={handleCompleteOnboarding}
         onSkip={handleSkipOnboarding}
+      />
+
+      <AuthModal
+        open={authModalOpen}
+        reason={authModalReason}
+        onClose={() => {
+          setAuthModalOpen(false);
+          setAuthModalReason(undefined);
+        }}
+        onAuthSuccess={handleAuthSuccess}
       />
 
       <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />

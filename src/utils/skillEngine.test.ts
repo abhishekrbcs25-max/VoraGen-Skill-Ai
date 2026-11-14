@@ -201,3 +201,128 @@ test('notifications helper tracks live updates, unread badges, and read transiti
   assert.equal(countUnreadNotifications(allRead), 0);
 });
 
+import {
+  buildProfileCollaborationKey,
+  ModelCooldownTracker,
+  parseQuotaCooldownMs,
+  TtlResponseCache,
+} from './geminiResilience';
+
+test('geminiResilience detects 429 quota errors, manages model cooldowns, and fails over cleanly', () => {
+  const err429 = new Error(
+    '{"error":{"code":429,"status":"RESOURCE_EXHAUSTED","details":[{"retryDelay":"120s"}]}}',
+  );
+  assert.equal(parseQuotaCooldownMs(err429), 120_000);
+  assert.equal(parseQuotaCooldownMs(new Error('network timeout')), null);
+
+  const tracker = new ModelCooldownTracker();
+  const t0 = 1_000_000;
+  assert.equal(tracker.pickAvailableModel('gemini-4-hydrogen', t0), 'gemini-4-hydrogen');
+
+  assert.equal(tracker.recordError('gemini-4-hydrogen', err429, t0), true);
+  assert.equal(tracker.isAvailable('gemini-4-hydrogen', t0 + 10_000), false);
+  assert.equal(tracker.pickAvailableModel('gemini-4-hydrogen', t0 + 10_000), 'gemini-3.1-flash-lite');
+
+  assert.equal(tracker.recordError('gemini-3.1-flash-lite', err429, t0 + 10_000), true);
+  assert.equal(tracker.pickAvailableModel('gemini-4-hydrogen', t0 + 20_000), null);
+  assert.equal(tracker.pickAvailableModel('gemini-4-hydrogen', t0 + 125_000), 'gemini-4-hydrogen');
+
+  const cache = new TtlResponseCache<string>(5_000, 2);
+  cache.set('k1', 'v1', t0);
+  assert.equal(cache.get('k1', t0 + 1_000), 'v1');
+  assert.equal(cache.get('k1', t0 + 6_000), null);
+
+  const keyA = buildProfileCollaborationKey(sampleProfile, 'Sync A');
+  const keyB = buildProfileCollaborationKey(sampleProfile, 'Sync B');
+  assert.notEqual(keyA, keyB);
+});
+
+import { createBlankUnauthenticatedProfile } from '../data/careerData';
+import {
+  buildResumeMarkdown,
+  calculateResumeCompleteness,
+  draftResumeSummary,
+  sortEducationEntries,
+} from './resumeHelpers';
+
+test('createBlankUnauthenticatedProfile returns completely empty signed-out state', () => {
+  const blank = createBlankUnauthenticatedProfile();
+  assert.equal(blank.isSignedIn, false);
+  assert.equal(blank.name, '');
+  assert.equal(blank.email, '');
+  assert.equal(blank.skills.length, 0);
+  assert.equal(blank.projects.length, 0);
+  assert.equal(blank.certifications.length, 0);
+  assert.equal(blank.streakDays, 0);
+  assert.equal(blank.streakPoints, 0);
+});
+
+test('resumeHelpers computes completeness, sorts education, and exports Markdown', () => {
+  const blank = createBlankUnauthenticatedProfile();
+  const zeroComp = calculateResumeCompleteness(blank);
+  assert.equal(zeroComp.scorePct, 0);
+  assert.equal(zeroComp.missingSections.length, 5);
+
+  const enriched: UserProfile = {
+    ...sampleProfile,
+    isSignedIn: true,
+    phone: '+91 9876543210',
+    location: 'Bengaluru',
+    educationHistory: [
+      {
+        id: 'e1',
+        institution: 'Higher Secondary School',
+        degree: 'Class XII',
+        fieldOfStudy: 'Science',
+        startYear: '2020',
+        endYear: '2022',
+      },
+      {
+        id: 'e2',
+        institution: 'State Tech University',
+        degree: 'B.Tech',
+        fieldOfStudy: 'Computer Science',
+        startYear: '2022',
+        endYear: '2026',
+        gpaOrScore: '9.1 CGPA',
+      },
+    ],
+    projects: [
+      {
+        id: 'p1',
+        title: 'TaskFlow API',
+        description: 'Built distributed task queue',
+        skillsUsed: ['Node.js', 'SQL'],
+      },
+    ],
+    certifications: [
+      {
+        id: 'c1',
+        title: 'AWS Cloud Practitioner',
+        issuer: 'AWS',
+        year: '2025',
+      },
+    ],
+  };
+
+  const sorted = sortEducationEntries(enriched.educationHistory);
+  assert.equal(sorted[0].degree, 'B.Tech');
+
+  const comp = calculateResumeCompleteness(enriched);
+  assert.equal(comp.scorePct, 100);
+  assert.equal(comp.missingSections.length, 0);
+
+  const drafted = draftResumeSummary(enriched, 'Full Stack Developer');
+  assert.ok(drafted.includes('State Tech University'));
+
+  const md = buildResumeMarkdown(enriched, 'Full Stack Developer');
+  assert.ok(md.includes('# Alex Student'));
+  assert.ok(md.includes('## Educational Background'));
+  assert.ok(md.includes('State Tech University'));
+  assert.ok(md.includes('## Skills Gained'));
+  assert.ok(md.includes('## Projects'));
+  assert.ok(md.includes('TaskFlow API'));
+  assert.ok(md.includes('## Certifications Obtained'));
+  assert.ok(md.includes('AWS Cloud Practitioner'));
+});
+

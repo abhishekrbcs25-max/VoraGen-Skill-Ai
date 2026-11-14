@@ -3,6 +3,7 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 export type NavSection =
   | 'home'
   | 'profile'
+  | 'resume'
   | 'skill-analysis'
   | 'career-matching'
   | 'learning-recommendations'
@@ -79,6 +80,17 @@ export interface ApplicationRecord {
   status: 'Applied' | 'Assessment Pending' | 'Interview Ready';
 }
 
+export interface EducationEntry {
+  id: string;
+  institution: string;
+  degree: string;
+  fieldOfStudy: string;
+  startYear: string;
+  endYear: string;
+  gpaOrScore?: string;
+  highlights?: string;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -87,6 +99,13 @@ export interface UserProfile {
   isSignedIn: boolean;
   headline: string;
   education: string;
+  phone?: string;
+  location?: string;
+  linkedinUrl?: string;
+  githubUrl?: string;
+  portfolioUrl?: string;
+  resumeSummary?: string;
+  educationHistory?: EducationEntry[];
   targetCareerId: string;
   careerGoals: string[];
   skills: UserSkill[];

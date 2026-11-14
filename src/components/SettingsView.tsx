@@ -295,7 +295,7 @@ export function SettingsView({
           </h2>
 
           <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-            Download a portable JSON archive of your learner profile, skills, certifications, coding streak, and applications, or restore the default sample student workspace.
+            Download a portable JSON archive of your learner profile, resume details, skills, certifications, coding streak, and applications, or clear your workspace back to a clean slate.
           </p>
 
           <div className="flex flex-wrap gap-3">
@@ -314,7 +314,7 @@ export function SettingsView({
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-white/15 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset Sample Student</span>
+              <span>Clear My Workspace</span>
             </button>
 
             <button
