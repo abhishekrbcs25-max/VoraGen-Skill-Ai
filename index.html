@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Voragen — Adaptive AI Career & Skill Intelligence</title>
+    <meta name="description" content="AI-powered adaptive learning platform with multi-agent skill analysis, personalized roadmaps, AI video mentorship, 50,000+ coding challenges, skill games, and 20,000+ global company job matching." />
+    <meta property="og:title" content="Voragen — Adaptive AI Career & Skill Intelligence" />
+    <meta property="og:description" content="Identify skill gaps, master new technologies with collaborative AI mentors, build coding streaks, and match with 20,000+ global employers." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem('pathforge-theme') || 'dark';
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var isDark = mode === 'dark' || (mode === 'system' && prefersDark);
+          document.documentElement.classList.toggle('dark', isDark);
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body class="antialiased selection:bg-blue-500/20 selection:text-blue-600 dark:selection:bg-pink-500/25 dark:selection:text-amber-300">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

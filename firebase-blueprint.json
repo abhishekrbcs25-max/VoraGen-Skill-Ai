@@ -1,0 +1,147 @@
+{
+  "entities": {
+    "UserPublicProfile": {
+      "title": "UserPublicProfile",
+      "description": "Learner career workspace state without PII (PII isolated under private subcollection).",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Firebase Authentication UID matching document ID."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Learner display name."
+        },
+        "headline": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Short learner headline."
+        },
+        "education": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "University or organization."
+        },
+        "targetCareerId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Selected career role identifier."
+        },
+        "streakPoints": {
+          "type": "number",
+          "description": "Total coding and game streak points."
+        },
+        "streakDays": {
+          "type": "number",
+          "description": "Consecutive active learning days."
+        },
+        "gamesWon": {
+          "type": "number",
+          "description": "Total cognitive and 3D skill challenges completed."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "targetCareerId",
+        "streakPoints",
+        "streakDays",
+        "gamesWon",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Isolated PII record for authenticated learner email and provider.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 200
+        },
+        "authProvider": {
+          "type": "string",
+          "enum": ["google", "microsoft", "email"]
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "authProvider", "updatedAt"]
+    },
+    "AssessmentLog": {
+      "title": "AssessmentLog",
+      "description": "Learner skill verification or diagnostic quiz record.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "skillName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "scorePct": {
+          "type": "number"
+        },
+        "remedialTriggered": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "skillName", "scorePct", "remedialTriggered", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublicProfile" },
+      "description": "Public/non-PII learner readiness and streak document."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Owner-only isolated PII document."
+    },
+    "/users/{userId}/assessments/{assessmentId}": {
+      "schema": { "$ref": "#/entities/AssessmentLog" },
+      "description": "Owner-scoped skill diagnostic and authenticity verification log."
+    }
+  }
+}

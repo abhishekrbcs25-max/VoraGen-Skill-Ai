@@ -1,0 +1,1177 @@
+import 'dotenv/config';
+import express from 'express';
+import fs from 'node:fs';
+import http from 'node:http';
+import path from 'node:path';
+import { createServer as createViteServer } from 'vite';
+import { WebSocketServer, type WebSocket } from 'ws';
+import { GoogleGenAI, Modality, ThinkingLevel, Type } from '@google/genai';
+import {
+  CAREER_ROLES,
+  INITIAL_SAMPLE_PROFILE,
+  LEARNING_CATALOG,
+  MENTOR_STAFF,
+  createFreshUserProfile,
+} from './src/data/careerData';
+import { calculateSkillMatch, generateAdaptiveRoadmap } from './src/utils/skillEngine';
+import {
+  combineInteractionText,
+  extractGroundingSources,
+  normalizeThinkingLevel,
+  type ChatModelId,
+  type InteractionStepLike,
+  type ThinkingPreset,
+} from './src/utils/aiHelpers.ts';
+import { requireAuth, type AuthRequest } from './src/middleware/auth.ts';
+import {
+  getOrCreateUser,
+  getUserDashboardRecords,
+  recordSqlAiSession,
+  recordSqlAssessment,
+  updateUserCareerSnapshot,
+} from './src/db/users.ts';
+import type { AIVideoLesson, InterviewEvaluation, MultiAgentReport, UserProfile } from './src/types';
+
+const PORT = Number(process.env.PORT || 3000);
+const DATA_DIR = path.resolve(process.cwd(), '.pathforge-data');
+const PROFILE_FILE = path.join(DATA_DIR, 'profiles.json');
+
+function ensureDataStore(): Record<string, UserProfile> {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(PROFILE_FILE)) {
+      const initial: Record<string, UserProfile> = {
+        default: INITIAL_SAMPLE_PROFILE,
+      };
+      fs.writeFileSync(PROFILE_FILE, JSON.stringify(initial, null, 2));
+      return initial;
+    }
+    const raw = fs.readFileSync(PROFILE_FILE, 'utf-8');
+    return JSON.parse(raw) as Record<string, UserProfile>;
+  } catch {
+    return { default: INITIAL_SAMPLE_PROFILE };
+  }
+}
+
+function saveDataStore(store: Record<string, UserProfile>): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(PROFILE_FILE, JSON.stringify(store, null, 2));
+  } catch {
+    // Non-fatal in read-only sandboxes
+  }
+}
+
+function getGeminiClient(): GoogleGenAI | null {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') return null;
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
+}
+
+function formatGeminiError(err: unknown): { status: number; message: string; needsPaidKey: boolean } {
+  const msg = err instanceof Error ? err.message : String(err);
+  const lower = msg.toLowerCase();
+  if (lower.includes('resource_exhausted') || lower.includes('quota') || lower.includes('429')) {
+    return {
+      status: 429,
+      message: 'API quota reached on the active key. Please retry shortly or configure a billing-enabled Gemini API key in AI Studio Settings > Secrets.',
+      needsPaidKey: true,
+    };
+  }
+  if (lower.includes('permission_denied') || lower.includes('403') || lower.includes('not enabled')) {
+    return {
+      status: 403,
+      message: 'This model tier requires a billing-enabled Gemini API key in AI Studio Settings > Secrets.',
+      needsPaidKey: true,
+    };
+  }
+  return {
+    status: 500,
+    message: msg || 'AI service error',
+    needsPaidKey: false,
+  };
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms = 8500): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('AI request timeout')), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function startServer() {
+  const app = express();
+  app.use(express.json({ limit: '12mb' }));
+
+  let profileStore = ensureDataStore();
+
+  // Health check
+  app.get('/api/health', (_req, res) => {
+    res.json({ ok: true, service: 'Voragen Adaptive AI Platform' });
+  });
+
+  // Safe Google Maps key check (returns runtime env key if Vite compile-time var wasn't set)
+  app.get('/api/config/maps', (_req, res) => {
+    const rawKey = process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || '';
+    const apiKey = rawKey && rawKey !== 'MY_GOOGLE_MAPS_API_KEY' ? rawKey : '';
+    res.json({ hasKey: Boolean(apiKey), apiKey });
+  });
+
+  // Get active learner profile (local/guest JSON store)
+  app.get('/api/profile', (req, res) => {
+    const key = typeof req.query.key === 'string' ? req.query.key : 'default';
+    const profile = profileStore[key] || INITIAL_SAMPLE_PROFILE;
+    res.json(profile);
+  });
+
+  // Persist learner profile updates
+  app.put('/api/profile', (req, res) => {
+    const key = typeof req.query.key === 'string' ? req.query.key : 'default';
+    const body = req.body as UserProfile;
+    if (!body || typeof body.name !== 'string') {
+      res.status(400).json({ error: 'Invalid profile payload' });
+      return;
+    }
+    profileStore[key] = body;
+    saveDataStore(profileStore);
+    res.json({ ok: true, profile: body });
+  });
+
+  // Reset to initial sample scenario (for guest demo)
+  app.post('/api/profile/reset', (req, res) => {
+    const key = typeof req.query.key === 'string' && req.query.key ? req.query.key : 'default';
+    const fresh =
+      key === 'default'
+        ? INITIAL_SAMPLE_PROFILE
+        : createFreshUserProfile({
+            name: profileStore[key]?.name || 'Learner',
+            email: key,
+            authProvider: profileStore[key]?.authProvider || 'email',
+          });
+    profileStore[key] = fresh;
+    saveDataStore(profileStore);
+    res.json({ ok: true, profile: fresh });
+  });
+
+  // Register a brand-new user with completely fresh empty data
+  app.post('/api/auth/register', (req, res) => {
+    const { name, email, authProvider } = req.body as {
+      name?: string;
+      email?: string;
+      authProvider?: UserProfile['authProvider'];
+    };
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      res.status(400).json({ error: 'Valid email is required' });
+      return;
+    }
+    const cleanName = (name || '').trim() || cleanEmail.split('@')[0];
+    const freshProfile = createFreshUserProfile({
+      name: cleanName,
+      email: cleanEmail,
+      authProvider: authProvider || 'email',
+    });
+    profileStore[cleanEmail] = freshProfile;
+    saveDataStore(profileStore);
+    res.json({ ok: true, key: cleanEmail, profile: freshProfile });
+  });
+
+  // Log in existing user (or initialize fresh profile for Google/Microsoft OAuth first-timers)
+  app.post('/api/auth/login', (req, res) => {
+    const { email, name, authProvider } = req.body as {
+      email?: string;
+      name?: string;
+      authProvider?: UserProfile['authProvider'];
+    };
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      res.status(400).json({ error: 'Valid email is required' });
+      return;
+    }
+    if (profileStore[cleanEmail]) {
+      const existing = { ...profileStore[cleanEmail], isSignedIn: true };
+      profileStore[cleanEmail] = existing;
+      saveDataStore(profileStore);
+      res.json({ ok: true, key: cleanEmail, isNew: false, profile: existing });
+      return;
+    }
+
+    const freshProfile = createFreshUserProfile({
+      name: (name || '').trim() || cleanEmail.split('@')[0],
+      email: cleanEmail,
+      authProvider: authProvider || 'email',
+    });
+    profileStore[cleanEmail] = freshProfile;
+    saveDataStore(profileStore);
+    res.json({ ok: true, key: cleanEmail, isNew: true, profile: freshProfile });
+  });
+
+  // Cloud SQL Authenticated Learner Snapshot & Progress Endpoints
+  app.get('/api/sql/profile', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const uid = req.user!.uid;
+      const email = req.user!.email || `${uid}@pathforge.local`;
+      await getOrCreateUser(uid, email, req.user!.name || null);
+      const dashboard = await getUserDashboardRecords(uid);
+      res.json({ ok: true, dashboard });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.put('/api/sql/profile', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const uid = req.user!.uid;
+      const email = req.user!.email || `${uid}@pathforge.local`;
+      const body = req.body as {
+        displayName?: string;
+        targetCareerId?: string;
+        streakPoints?: number;
+        streakDays?: number;
+      };
+      await getOrCreateUser(uid, email, body.displayName || req.user!.name || null);
+      const updated = await updateUserCareerSnapshot(uid, {
+        displayName: body.displayName,
+        targetCareerId: body.targetCareerId,
+        streakPoints: body.streakPoints,
+        streakDays: body.streakDays,
+      });
+      res.json({ ok: true, user: updated });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/sql/assessments', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const uid = req.user!.uid;
+      const email = req.user!.email || `${uid}@pathforge.local`;
+      const { skillName, scorePct, remedialTriggered, notes } = req.body as {
+        skillName?: string;
+        scorePct?: number;
+        remedialTriggered?: boolean;
+        notes?: string;
+      };
+      if (!skillName || typeof scorePct !== 'number') {
+        res.status(400).json({ error: 'skillName and numeric scorePct are required' });
+        return;
+      }
+      const created = await recordSqlAssessment(uid, email, {
+        skillName,
+        scorePct,
+        remedialTriggered: Boolean(remedialTriggered),
+        notes,
+      });
+      res.json({ ok: true, assessment: created });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // Multi-Model Interactions API Chatbot (Free-tier default models: gemini-4-hydrogen & gemini-3.1-flash-lite)
+  app.post('/api/ai/chat', async (req, res) => {
+    const { message, model, thinkingLevel, previousInteractionId, profile } = req.body as {
+      message?: string;
+      model?: ChatModelId;
+      thinkingLevel?: ThinkingPreset;
+      previousInteractionId?: string;
+      profile?: UserProfile;
+    };
+
+    if (!message || !message.trim()) {
+      res.status(400).json({ error: 'Message is required' });
+      return;
+    }
+
+    const selectedModel: ChatModelId =
+      model === 'gemini-3.1-flash-lite' ? 'gemini-3.1-flash-lite' : 'gemini-4-hydrogen';
+    const resolvedThinking = normalizeThinkingLevel(selectedModel, thinkingLevel);
+    const targetRole = profile
+      ? CAREER_ROLES.find((r) => r.id === profile.targetCareerId) ?? CAREER_ROLES[0]
+      : CAREER_ROLES[0];
+    const match = profile
+      ? calculateSkillMatch(profile.skills, targetRole, profile.certifications, profile.projects)
+      : null;
+
+    const systemInstruction = `You are Voragen's Senior Career & Technical Coach.
+${
+  profile && match
+    ? `Active learner: ${profile.name}. Target role: ${targetRole.title} (${match.overallReadinessPct}% ready).
+Current skills: ${profile.skills.map((s) => `${s.name} (${s.level}%)`).join(', ') || 'None'}.
+Missing skills: ${match.missingSkillNames.join(', ') || 'None'}.`
+    : ''
+}
+Give clear, accurate, actionable guidance with code examples or concrete study steps when relevant.`;
+
+    const ai = getGeminiClient();
+    if (ai) {
+      try {
+        const interaction = await withTimeout(
+          ai.interactions.create({
+            model: selectedModel,
+            input: message.trim(),
+            previous_interaction_id: previousInteractionId || undefined,
+            system_instruction: previousInteractionId ? undefined : systemInstruction,
+            generation_config: {
+              thinking_level: resolvedThinking as never,
+              thinking_summaries: 'auto',
+            },
+          }),
+          14000,
+        );
+
+        const steps = (interaction.steps || []) as unknown as InteractionStepLike[];
+        const { text, thoughtSummary } = combineInteractionText(steps);
+        const reply = text || interaction.output_text || 'I processed your question — try rephrasing with more context.';
+
+        res.json({
+          reply,
+          thoughtSummary,
+          interactionId: interaction.id,
+          modelUsed: selectedModel,
+          thinkingLevel: resolvedThinking,
+          source: 'gemini-interactions',
+        });
+        return;
+      } catch (err) {
+        const formatted = formatGeminiError(err);
+        if (formatted.needsPaidKey) {
+          res.status(formatted.status).json({ error: formatted.message, needsPaidKey: true });
+          return;
+        }
+        console.warn('Interactions chat fallback:', formatted.message);
+      }
+    }
+
+    // Grounded career coach fallback when GEMINI_API_KEY is unset
+    const nextGap = match?.missingSkillNames[0] || targetRole.requiredSkills[0]?.name || 'React';
+    const fallbackReply = `Focusing on **${targetRole.title}**${match ? ` (currently ${match.overallReadinessPct}% ready)` : ''}: prioritize **${nextGap}** next. Break your session into 20 minutes of core concept mastery, 1 interactive Skill Analysis check, and 2 Code Arena problems targeting ${nextGap}.`;
+    res.json({
+      reply: fallbackReply,
+      thoughtSummary: `Analyzed learner profile against ${targetRole.title} competencies using adaptive heuristics (${selectedModel} · ${resolvedThinking}).`,
+      interactionId: previousInteractionId || `local-${Date.now()}`,
+      modelUsed: selectedModel,
+      thinkingLevel: resolvedThinking,
+      source: 'adaptive-engine',
+    });
+  });
+
+  // Search & Maps Grounded Career Advisor
+  app.post('/api/ai/grounded-search', async (req, res) => {
+    const { query, useSearch = true, useMaps = false, cityHint } = req.body as {
+      query?: string;
+      useSearch?: boolean;
+      useMaps?: boolean;
+      cityHint?: string;
+    };
+
+    if (!query || !query.trim()) {
+      res.status(400).json({ error: 'Query is required' });
+      return;
+    }
+
+    const tools: Array<{ type: 'google_search' } | { type: 'google_maps' }> = [];
+    if (useSearch) tools.push({ type: 'google_search' });
+    if (useMaps) tools.push({ type: 'google_maps' });
+    if (tools.length === 0) tools.push({ type: 'google_search' });
+
+    const ai = getGeminiClient();
+    if (ai) {
+      try {
+        const prompt = cityHint
+          ? `${query.trim()}\nFocus location context: ${cityHint}`
+          : query.trim();
+        const interaction = await withTimeout(
+          ai.interactions.create({
+            model: 'gemini-4-hydrogen',
+            input: prompt,
+            tools: tools as never,
+            system_instruction:
+              'Provide factual, up-to-date career, tech hiring, or employer location intelligence grounded in Google Search and Google Maps results. Keep answers concise and structured.',
+          }),
+          15000,
+        );
+
+        const steps = (interaction.steps || []) as unknown as InteractionStepLike[];
+        const { text } = combineInteractionText(steps);
+        const sources = extractGroundingSources(steps);
+
+        res.json({
+          text: text || interaction.output_text || 'No grounded summary returned.',
+          sources,
+          modelUsed: 'gemini-4-hydrogen',
+          source: 'gemini-grounded',
+        });
+        return;
+      } catch (err) {
+        const formatted = formatGeminiError(err);
+        if (formatted.needsPaidKey) {
+          res.status(formatted.status).json({ error: formatted.message, needsPaidKey: true });
+          return;
+        }
+        console.warn('Grounded search fallback:', formatted.message);
+      }
+    }
+
+    const fallbackSources = [
+      ...(useMaps
+        ? [
+            {
+              title: `${cityHint || 'Global'} Tech Employer Hubs on Google Maps`,
+              url: `https://www.google.com/maps/search/${encodeURIComponent(cityHint ? `software companies in ${cityHint}` : 'major technology campuses')}`,
+              sourceType: 'maps' as const,
+            },
+          ]
+        : []),
+      ...(useSearch
+        ? [
+            {
+              title: 'MDN & Roadmap Engineering Guides',
+              url: 'https://developer.mozilla.org/en-US/docs/Learn',
+              sourceType: 'search' as const,
+            },
+            {
+              title: 'Google Careers Engineering Roles',
+              url: 'https://www.google.com/about/careers/applications/',
+              sourceType: 'search' as const,
+            },
+          ]
+        : []),
+    ];
+
+    res.json({
+      text: `Grounded Career Brief for "${query.trim()}"${cityHint ? ` (${cityHint})` : ''}: Top hiring teams emphasize TypeScript, React, Node.js/Python APIs, SQL query optimization, and verifiable project architectures. Open the curated reference links below or enable GEMINI_API_KEY in AI Studio Secrets for live real-time Search & Maps citations.`,
+      sources: fallbackSources,
+      modelUsed: 'gemini-4-hydrogen',
+      source: 'adaptive-engine',
+    });
+  });
+
+  // Audio Transcription Endpoint (gemini-3.5-transcribe)
+  app.post('/api/ai/transcribe', async (req, res) => {
+    const { audioBase64, mimeType, prompt } = req.body as {
+      audioBase64?: string;
+      mimeType?: string;
+      prompt?: string;
+    };
+
+    if (!audioBase64) {
+      res.status(400).json({ error: 'audioBase64 is required' });
+      return;
+    }
+
+    const ai = getGeminiClient();
+    if (ai) {
+      try {
+        const interaction = await withTimeout(
+          ai.interactions.create({
+            model: 'gemini-3.5-transcribe',
+            input: [
+              {
+                type: 'text',
+                text: prompt || 'Transcribe this learner recording accurately and summarize the key technical goal in 1 sentence.',
+              },
+              {
+                type: 'audio',
+                data: audioBase64,
+                mime_type: mimeType || 'audio/webm',
+              },
+            ],
+          }),
+          15000,
+        );
+        const steps = (interaction.steps || []) as unknown as InteractionStepLike[];
+        const { text } = combineInteractionText(steps);
+        res.json({
+          transcript: text || interaction.output_text || 'Transcription complete.',
+          modelUsed: 'gemini-3.5-transcribe',
+          source: 'gemini-transcribe',
+        });
+        return;
+      } catch (err) {
+        const formatted = formatGeminiError(err);
+        if (formatted.needsPaidKey) {
+          res.status(formatted.status).json({ error: formatted.message, needsPaidKey: true });
+          return;
+        }
+        console.warn('Transcribe fallback:', formatted.message);
+      }
+    }
+
+    res.json({
+      transcript:
+        'Audio clip received cleanly. Configure GEMINI_API_KEY in AI Studio Settings > Secrets to transcribe spoken recordings with gemini-3.5-transcribe.',
+      modelUsed: 'gemini-3.5-transcribe',
+      source: 'adaptive-engine',
+    });
+  });
+
+  // Mock Technical Interview Evaluation Endpoint
+  app.post('/api/ai/interview-eval', async (req, res) => {
+    const { question, answer, roleTitle } = req.body as {
+      question?: string;
+      answer?: string;
+      roleTitle?: string;
+    };
+    if (!question || !answer) {
+      res.status(400).json({ error: 'Question and answer are required' });
+      return;
+    }
+
+    const ai = getGeminiClient();
+    if (ai) {
+      try {
+        const response = await withTimeout(
+          ai.models.generateContent({
+            model: 'gemini-4-hydrogen',
+            contents: `Evaluate this candidate's mock interview answer for a ${roleTitle || 'Software Engineer'} role.
+Question: ${question}
+Candidate Answer: ${answer}
+Score 0-100, list 2 concrete strengths, 2 concrete improvements, and 2-sentence rubric feedback.`,
+            config: {
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  scorePct: { type: Type.INTEGER },
+                  strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  modelFeedback: { type: Type.STRING },
+                },
+              },
+            },
+          }),
+          7500,
+        );
+        const parsed = JSON.parse(response.text || '{}') as Partial<InterviewEvaluation>;
+        if (typeof parsed.scorePct === 'number') {
+          res.json({
+            scorePct: Math.max(0, Math.min(100, parsed.scorePct)),
+            strengths: parsed.strengths || ['Clear attempt at framing the problem'],
+            improvements: parsed.improvements || ['Add concrete trade-offs and edge-case handling'],
+            modelFeedback: parsed.modelFeedback || 'Solid foundation; back claims with metrics or complexity analysis.',
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn('Interview eval fallback:', (err as Error).message);
+      }
+    }
+
+    const wordCount = answer.trim().split(/\s+/).length;
+    const hasTechTerms = /(api|database|cache|async|complexity|o\(|state|test|index|scale|auth|security|component)/i.test(
+      answer,
+    );
+    const scorePct = Math.min(95, Math.max(35, 38 + Math.min(35, wordCount) + (hasTechTerms ? 22 : 0)));
+    const fallback: InterviewEvaluation = {
+      scorePct,
+      strengths: [
+        wordCount >= 20 ? 'Structured explanation with sufficient context' : 'Concise direct response',
+        hasTechTerms ? 'Included concrete engineering terminology' : 'Focused on core goal',
+      ],
+      improvements: [
+        'Explicitly state time/space complexity or failure recovery paths',
+        'Give a measurable real-world project example to prove experience',
+      ],
+      modelFeedback: `Rubric score: ${scorePct}%. ${
+        scorePct >= 75
+          ? 'Strong interview-ready answer demonstrating solid architectural awareness.'
+          : 'Expand on implementation details, edge cases, and trade-offs to reach senior-ready clarity.'
+      }`,
+    };
+    res.json(fallback);
+  });
+
+  // Multi-Agent AI Collaboration Pipeline
+  app.post('/api/ai/collaborate', async (req, res) => {
+    const { profile, triggerReason } = req.body as {
+      profile: UserProfile;
+      triggerReason?: string;
+    };
+
+    if (!profile) {
+      res.status(400).json({ error: 'Profile is required' });
+      return;
+    }
+
+    const targetRole =
+      CAREER_ROLES.find((r) => r.id === profile.targetCareerId) ?? CAREER_ROLES[0];
+    const match = calculateSkillMatch(
+      profile.skills,
+      targetRole,
+      profile.certifications,
+      profile.projects,
+    );
+    const roadmap = generateAdaptiveRoadmap(
+      profile.skills,
+      targetRole,
+      profile.remedialSkills,
+      profile.completedModuleIds,
+      LEARNING_CATALOG,
+    );
+
+    const lowAssessments = profile.assessments.filter((a) => a.scorePct < 60);
+    const ai = getGeminiClient();
+
+    if (ai) {
+      try {
+        const prompt = `You are coordinating 4 specialized AI agents in Voragen for a learner:
+Learner Name: ${profile.name}
+Target Career: ${targetRole.title} (${targetRole.domain})
+Current Skills: ${profile.skills.map((s) => `${s.name} (${s.level}%)`).join(', ')}
+Missing Skills: ${match.missingSkillNames.join(', ') || 'None'}
+Weak Skills (<60%): ${match.weakSkillNames.join(', ') || 'None'}
+Low Assessments (<60%): ${lowAssessments.map((a) => `${a.skillName}: ${a.scorePct}%`).join(', ') || 'None'}
+Certifications: ${profile.certifications.map((c) => c.title).join(', ') || 'None'}
+Projects: ${profile.projects.map((p) => p.title).join(', ') || 'None'}
+Trigger Event: ${triggerReason || 'Manual full diagnostic sync'}
+Overall Computed Readiness: ${match.overallReadinessPct}%
+
+Produce concise, grounded outputs from the 4 collaborating agents:
+1. Skill Profiler Agent (Dr. Elena Vance)
+2. Market Matcher Agent (Marcus Chen)
+3. Curriculum Architect Agent (Prof. Aria Kapoor)
+4. Adaptive Career Mentor Agent (Voragen Coordinator)`;
+
+        const response = await withTimeout(
+          ai.models.generateContent({
+            model: 'gemini-4-hydrogen',
+            contents: prompt,
+            config: {
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  executiveSummary: { type: Type.STRING },
+                  recalibrationNotice: { type: Type.STRING },
+                  steps: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        agentName: { type: Type.STRING },
+                        agentRole: { type: Type.STRING },
+                        summary: { type: Type.STRING },
+                        actionItems: {
+                          type: Type.ARRAY,
+                          items: { type: Type.STRING },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          }),
+          7500,
+        );
+
+        const parsed = JSON.parse(response.text || '{}') as {
+          executiveSummary?: string;
+          recalibrationNotice?: string;
+          steps?: Array<{
+            agentName: string;
+            agentRole: string;
+            summary: string;
+            actionItems: string[];
+          }>;
+        };
+
+        if (parsed.steps && parsed.steps.length >= 3) {
+          const report: MultiAgentReport = {
+            generatedAt: new Date().toISOString(),
+            source: 'gemini-4-hydrogen',
+            overallReadinessPct: match.overallReadinessPct,
+            executiveSummary:
+              parsed.executiveSummary ||
+              `Multi-agent analysis complete for ${targetRole.title} (${match.overallReadinessPct}% readiness).`,
+            recalibrationNotice:
+              parsed.recalibrationNotice ||
+              (lowAssessments.length > 0
+                ? `Remedial modules activated for ${lowAssessments.map((a) => a.skillName).join(', ')}.`
+                : undefined),
+            steps: parsed.steps.map((s) => ({
+              ...s,
+              modelUsed: 'gemini-4-hydrogen',
+            })),
+            recommendedModules: roadmap.slice(0, 6),
+          };
+          res.json(report);
+          return;
+        }
+      } catch (err) {
+        console.warn('Gemini collaborate fallback activated:', (err as Error).message);
+      }
+    }
+
+    const report: MultiAgentReport = {
+      generatedAt: new Date().toISOString(),
+      source: 'adaptive-engine',
+      overallReadinessPct: match.overallReadinessPct,
+      executiveSummary: `${profile.name} is currently at ${match.overallReadinessPct}% readiness for ${targetRole.title}. Strongest foundation: ${match.strongSkillNames.join(', ') || 'Core basics'}. Priority gaps: ${match.missingSkillNames.join(', ') || 'Advanced specialization'}.`,
+      recalibrationNotice:
+        lowAssessments.length > 0
+          ? `Adaptive Trigger: Recent assessment below 60% in ${lowAssessments.map((a) => a.skillName).join(', ')}. Curriculum Architect reprioritized foundational labs.`
+          : triggerReason
+            ? `Roadmap synchronized after: ${triggerReason}`
+            : undefined,
+      steps: [
+        {
+          agentName: 'Skill Profiler Agent',
+          agentRole: 'Dr. Elena Vance · Competency Diagnostics',
+          modelUsed: 'gemini-4-hydrogen',
+          summary: `Evaluated ${profile.skills.length} existing skills and ${profile.assessments.length} diagnostic scores. Verified strengths in ${match.strongSkillNames.join(', ') || 'problem solving'}.`,
+          actionItems: [
+            match.weakSkillNames.length > 0
+              ? `Reinforce below-threshold areas: ${match.weakSkillNames.join(', ')}`
+              : 'All existing core skills meet baseline stability.',
+            `Leverage ${profile.projects.length} portfolio project(s) and ${profile.certifications.length} certification(s).`,
+          ],
+        },
+        {
+          agentName: 'Market Matcher Agent',
+          agentRole: 'Marcus Chen · Role Alignment',
+          modelUsed: 'gemini-4-hydrogen',
+          summary: `Compared profile against ${targetRole.title} (${targetRole.demandGrowth}, ${targetRole.salaryRange}). Missing ${match.missingSkillNames.length} required competencies.`,
+          actionItems: [
+            match.missingSkillNames.length > 0
+              ? `Bridge critical hiring gaps: ${match.missingSkillNames.join(', ')}`
+              : 'Profile meets core technical checklist for target applications.',
+            `Estimated ${match.estimatedWeeksToReady} week(s) to reach 85%+ interview readiness.`,
+          ],
+        },
+        {
+          agentName: 'Curriculum Architect Agent',
+          agentRole: 'Prof. Aria Kapoor · Adaptive Pathing',
+          modelUsed: 'gemini-4-hydrogen',
+          summary: `Sequenced ${roadmap.length} personalized modules placing ${profile.remedialSkills.length > 0 ? 'remedial bootcamps first' : 'highest-weight skill gaps first'}.`,
+          actionItems: roadmap.slice(0, 3).map((m) => `${m.priority}: ${m.title} (${m.durationHours}h)`),
+        },
+        {
+          agentName: 'Career Mentor Coordinator',
+          agentRole: 'Voragen Adaptive Guidance',
+          modelUsed: 'gemini-4-hydrogen',
+          summary: `Recommended daily cadence: 1 AI Video Lesson + 2 Code Arena challenges to extend your ${profile.streakDays}-day streak.`,
+          actionItems: [
+            'Complete next Skill Analysis quiz to validate progress.',
+            'Build one end-to-end project combining your existing SQL/Python backend with React.',
+          ],
+        },
+      ],
+      recommendedModules: roadmap.slice(0, 6),
+    };
+
+    res.json(report);
+  });
+
+  // AI Mentor Chat Endpoint
+  app.post('/api/ai/mentor', async (req, res) => {
+    const { mentorId, message, profile, history } = req.body as {
+      mentorId: string;
+      message: string;
+      profile: UserProfile;
+      history?: Array<{ role: 'user' | 'assistant'; text: string }>;
+    };
+
+    if (!message || !profile) {
+      res.status(400).json({ error: 'Message and profile are required' });
+      return;
+    }
+
+    const mentor = MENTOR_STAFF.find((m) => m.id === mentorId) ?? MENTOR_STAFF[0];
+    const targetRole =
+      CAREER_ROLES.find((r) => r.id === profile.targetCareerId) ?? CAREER_ROLES[0];
+    const match = calculateSkillMatch(
+      profile.skills,
+      targetRole,
+      profile.certifications,
+      profile.projects,
+    );
+
+    const ai = getGeminiClient();
+    if (ai) {
+      try {
+        const recentHistory = (history || [])
+          .slice(-4)
+          .map((h) => `${h.role === 'user' ? 'Learner' : mentor.name}: ${h.text}`)
+          .join('\n');
+
+        const response = await withTimeout(
+          ai.models.generateContent({
+            model: 'gemini-4-hydrogen',
+            contents: `${recentHistory ? recentHistory + '\n' : ''}Learner: ${message}`,
+            config: {
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              systemInstruction: `You are ${mentor.name}, ${mentor.role} at Voragen. Specialty: ${mentor.specialty}.
+You are mentoring ${profile.name} who wants to become a ${targetRole.title}.
+Current readiness: ${match.overallReadinessPct}%.
+Current skills: ${profile.skills.map((s) => `${s.name} (${s.level}%)`).join(', ')}.
+Missing skills: ${match.missingSkillNames.join(', ') || 'None'}.
+Remedial skills needing care: ${profile.remedialSkills.join(', ') || 'None'}.
+Give practical, encouraging, technically accurate advice in 3-5 concise sentences with concrete next steps.`,
+            },
+          }),
+          7500,
+        );
+
+        if (response.text) {
+          res.json({ reply: response.text.trim(), mentorName: mentor.name, source: 'gemini-4-hydrogen' });
+          return;
+        }
+      } catch (err) {
+        console.warn('Gemini mentor chat fallback:', (err as Error).message);
+      }
+    }
+
+    const nextGap = match.missingSkillNames[0] || match.weakSkillNames[0] || targetRole.requiredSkills[0].name;
+    const reply = `Hi ${profile.name} — speaking as ${mentor.name} (${mentor.role}): based on your ${match.overallReadinessPct}% readiness for ${targetRole.title}, your highest-leverage next move is mastering ${nextGap}. Since you already have a solid footing in ${profile.skills.map((s) => s.name).slice(0, 2).join(' and ') || 'core logic'}, try pairing a 15-minute AI Video Lesson on ${nextGap} with two Medium challenges in the Code Arena today.`;
+
+    res.json({ reply, mentorName: mentor.name, source: 'adaptive-engine' });
+  });
+
+  // AI Video Lesson Studio Generator
+  app.post('/api/ai/video-lesson', async (req, res) => {
+    const { topic, mentorId, targetRoleTitle } = req.body as {
+      topic: string;
+      mentorId: string;
+      targetRoleTitle: string;
+    };
+
+    if (!topic) {
+      res.status(400).json({ error: 'Topic is required' });
+      return;
+    }
+
+    const mentor = MENTOR_STAFF.find((m) => m.id === mentorId) ?? MENTOR_STAFF[0];
+    const ai = getGeminiClient();
+
+    if (ai) {
+      try {
+        const response = await withTimeout(
+          ai.models.generateContent({
+            model: 'gemini-4-hydrogen',
+            contents: `Create a crisp 4-scene interactive AI video lesson on "${topic}" tailored for a learner aiming to become a ${targetRoleTitle || 'Full Stack Developer'}, presented by ${mentor.name}. Each scene needs a title, concise spoken narration (2 sentences), a visualDiagramTitle, a short practical codeSnippet (4-8 lines), and a 1-line keyTakeaway.`,
+            config: {
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  scenes: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        sceneNumber: { type: Type.INTEGER },
+                        title: { type: Type.STRING },
+                        narration: { type: Type.STRING },
+                        visualDiagramTitle: { type: Type.STRING },
+                        codeSnippet: { type: Type.STRING },
+                        keyTakeaway: { type: Type.STRING },
+                        durationSec: { type: Type.INTEGER },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          }),
+          7500,
+        );
+
+        const parsed = JSON.parse(response.text || '{}') as { scenes?: AIVideoLesson['scenes'] };
+        if (parsed.scenes && parsed.scenes.length >= 3) {
+          const totalDurationSec = parsed.scenes.reduce((acc, s) => acc + (s.durationSec || 18), 0);
+          const lesson: AIVideoLesson = {
+            id: `vid-${Date.now()}`,
+            topic,
+            targetRole: targetRoleTitle,
+            mentorName: mentor.name,
+            totalDurationSec,
+            scenes: parsed.scenes.map((s, idx) => ({
+              ...s,
+              sceneNumber: idx + 1,
+              durationSec: s.durationSec || 18,
+            })),
+          };
+          res.json(lesson);
+          return;
+        }
+      } catch (err) {
+        console.warn('Gemini video lesson fallback:', (err as Error).message);
+      }
+    }
+
+    const lesson: AIVideoLesson = {
+      id: `vid-${Date.now()}`,
+      topic,
+      targetRole: targetRoleTitle || 'Full Stack Developer',
+      mentorName: mentor.name,
+      totalDurationSec: 72,
+      scenes: [
+        {
+          sceneNumber: 1,
+          title: `Why ${topic} Matters for ${targetRoleTitle || 'Your Goal'}`,
+          narration: `Welcome to ${mentor.name}'s studio session. Today we bridge ${topic} directly to your existing foundations so you can ship production features with confidence.`,
+          visualDiagramTitle: `${topic} Architecture Overview`,
+          codeSnippet: `// Goal Alignment Blueprint\nconst skill = "${topic}";\nconst role = "${targetRoleTitle || 'Full Stack Developer'}";\nconsole.log(\`Bridging \${skill} -> \${role}\`);`,
+          keyTakeaway: `${topic} unlocks real-world production capabilities required by top engineering teams.`,
+          durationSec: 18,
+        },
+        {
+          sceneNumber: 2,
+          title: `Core Mental Model & Data Flow`,
+          narration: `Think of ${topic} as predictable input-to-output transformations. Keeping state explicit prevents silent bugs under concurrent requests.`,
+          visualDiagramTitle: `Input -> Transform -> Verified Output`,
+          codeSnippet: `async function executePipeline(input) {\n  const validated = Boolean(input);\n  if (!validated) throw new Error("Invalid state");\n  return { status: "ready", topic: "${topic}" };\n}`,
+          keyTakeaway: `Explicit validation boundaries keep ${topic} systems reliable and testable.`,
+          durationSec: 18,
+        },
+        {
+          sceneNumber: 3,
+          title: `Common Mistakes & Production Guardrails`,
+          narration: `Most learners lose assessment points by ignoring edge cases, null states, or async error propagation. Always handle failure paths cleanly.`,
+          visualDiagramTitle: `Resilience & Error Boundary Pattern`,
+          codeSnippet: `try {\n  const result = await fetch("/api/profile");\n  if (!result.ok) throw new Error("HTTP " + result.status);\n} catch (err) {\n  console.error("Recovered cleanly:", err.message);\n}`,
+          keyTakeaway: `Defensive error handling separates hobby scripts from production engineering.`,
+          durationSec: 18,
+        },
+        {
+          sceneNumber: 4,
+          title: `Your Next 20-Minute Action Sprint`,
+          narration: `Now apply ${topic} immediately: solve one Easy or Medium Code Arena problem and take the Skill Analysis quiz to raise your readiness meter.`,
+          visualDiagramTitle: `Learn -> Code -> Verify Mastery`,
+          codeSnippet: `// Readiness Verification Loop\nconst steps = ["Watch Lesson", "Solve Code Arena", "Pass Assessment"];\nsteps.forEach((step, i) => console.log(\`\${i + 1}. \${step}\`));`,
+          keyTakeaway: `Immediate active recall turns video knowledge into verified career readiness.`,
+          durationSec: 18,
+        },
+      ],
+    };
+
+    res.json(lesson);
+  });
+
+  // Optional SQL AI session logger helper (best-effort)
+  app.post('/api/sql/ai-session', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const uid = req.user!.uid;
+      const email = req.user!.email || `${uid}@pathforge.local`;
+      const { mode, model, promptSummary } = req.body as {
+        mode?: string;
+        model?: string;
+        promptSummary?: string;
+      };
+      const created = await recordSqlAiSession(uid, email, {
+        mode: mode || 'chat',
+        model: model || 'gemini-4-hydrogen',
+        promptSummary: promptSummary || 'Study session',
+      });
+      res.json({ ok: true, session: created });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // HTTP server + Live API WebSocket bridge (/ws/live)
+  const httpServer = http.createServer(app);
+  const wss = new WebSocketServer({ noServer: true });
+
+  wss.on('connection', async (clientWs: WebSocket) => {
+    const ai = getGeminiClient();
+    if (!ai) {
+      clientWs.send(
+        JSON.stringify({
+          type: 'status',
+          mode: 'fallback',
+          message:
+            'Live Voice Tutor connected in offline coaching mode. Add GEMINI_API_KEY in AI Studio Secrets for bidirectional 16kHz/24kHz Gemini Live audio.',
+        }),
+      );
+      clientWs.on('message', (raw) => {
+        try {
+          const msg = JSON.parse(raw.toString()) as { type?: string; text?: string };
+          if (msg.type === 'text' && msg.text) {
+            clientWs.send(
+              JSON.stringify({
+                type: 'text',
+                text: `Live Coach Note: Break "${msg.text.slice(0, 60)}" into smaller milestones—review the syntax, run 2 Code Arena drills, and test your edge cases.`,
+              }),
+            );
+          }
+        } catch {
+          // Ignore malformed client frames
+        }
+      });
+      return;
+    }
+
+    let liveSession: Awaited<ReturnType<typeof ai.live.connect>> | null = null;
+    try {
+      liveSession = await ai.live.connect({
+        model: 'gemini-3.8-live',
+        config: {
+          responseModalities: [Modality.AUDIO],
+          systemInstruction:
+            'You are Voragen Live Voice Tutor. Coach learners concisely on programming, system design, and interview preparation in natural spoken English.',
+        },
+        callbacks: {
+          onopen: () => {
+            if (clientWs.readyState === clientWs.OPEN) {
+              clientWs.send(
+                JSON.stringify({
+                  type: 'status',
+                  mode: 'live',
+                  message: 'Connected to Gemini 3.8 Live Tutor (16kHz in / 24kHz out).',
+                }),
+              );
+            }
+          },
+          onmessage: (serverMsg) => {
+            if (clientWs.readyState !== clientWs.OPEN) return;
+            const parts = serverMsg.serverContent?.modelTurn?.parts || [];
+            for (const part of parts) {
+              if (part.inlineData?.data && part.inlineData.mimeType?.startsWith('audio/')) {
+                clientWs.send(
+                  JSON.stringify({
+                    type: 'audio',
+                    data: part.inlineData.data,
+                    mimeType: part.inlineData.mimeType,
+                  }),
+                );
+              } else if (part.text) {
+                clientWs.send(JSON.stringify({ type: 'text', text: part.text }));
+              }
+            }
+            if (serverMsg.serverContent?.interrupted) {
+              clientWs.send(JSON.stringify({ type: 'interrupted' }));
+            }
+          },
+          onerror: (err) => {
+            if (clientWs.readyState === clientWs.OPEN) {
+              clientWs.send(
+                JSON.stringify({
+                  type: 'error',
+                  message: err?.message || 'Live API error',
+                }),
+              );
+            }
+          },
+          onclose: () => {
+            if (clientWs.readyState === clientWs.OPEN) {
+              clientWs.send(JSON.stringify({ type: 'closed' }));
+            }
+          },
+        },
+      });
+    } catch (err) {
+      const formatted = formatGeminiError(err);
+      if (clientWs.readyState === clientWs.OPEN) {
+        clientWs.send(
+          JSON.stringify({
+            type: 'status',
+            mode: 'fallback',
+            message: formatted.message,
+          }),
+        );
+      }
+    }
+
+    clientWs.on('message', (raw) => {
+      if (!liveSession) return;
+      try {
+        const msg = JSON.parse(raw.toString()) as {
+          type?: string;
+          data?: string;
+          text?: string;
+        };
+        if (msg.type === 'audio' && msg.data) {
+          liveSession.sendRealtimeInput({
+            audio: { data: msg.data, mimeType: 'audio/pcm;rate=16000' },
+          });
+        } else if (msg.type === 'text' && msg.text) {
+          liveSession.sendClientContent({
+            turns: [{ role: 'user', parts: [{ text: msg.text }] }],
+            turnComplete: true,
+          });
+        }
+      } catch {
+        // Ignore non-JSON frames
+      }
+    });
+
+    clientWs.on('close', () => {
+      try {
+        liveSession?.close();
+      } catch {
+        // Ignore close errors
+      }
+    });
+  });
+
+  httpServer.on('upgrade', (request, socket, head) => {
+    const pathname = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`).pathname;
+    if (pathname === '/ws/live') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    }
+  });
+
+  // Prevent browsers from caching stale HTML shell or favicon across rebrands/updates
+  app.use((req, res, next) => {
+    if (
+      req.path === '/' ||
+      req.path.endsWith('.html') ||
+      req.path === '/favicon.svg'
+    ) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+    }
+    next();
+  });
+
+  // Vite dev middleware or static prod build
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true, hmr: false },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.resolve(process.cwd(), 'dist');
+    app.use(express.static(distPath, { index: false }));
+    app.get('*', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`Voragen server running on http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer().catch((err) => {
+  console.error('Failed to start Voragen server:', err);
+  process.exit(1);
+});

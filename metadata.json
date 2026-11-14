@@ -1,0 +1,6 @@
+{
+  "name": "PathForge",
+  "description": "AI-powered adaptive skill intelligence, multi-agent career mentoring, coding arena, cognitive skill games, and global job matching platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

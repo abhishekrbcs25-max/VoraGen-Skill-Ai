@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'targetCareerId', 'streakPoints', 'streakDays', 'gamesWon', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'headline', 'education', 'targetCareerId', 'streakPoints', 'streakDays', 'gamesWon', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && (!data.keys().hasAny(['headline']) || (data.headline is string && data.headline.size() <= 160))
+        && (!data.keys().hasAny(['education']) || (data.education is string && data.education.size() <= 120))
+        && isValidId(data.targetCareerId) && data.targetCareerId.size() <= 64
+        && (data.streakPoints is int || data.streakPoints is float) && data.streakPoints >= 0 && data.streakPoints <= 10000000
+        && (data.streakDays is int || data.streakDays is float) && data.streakDays >= 0 && data.streakDays <= 36500
+        && (data.gamesWon is int || data.gamesWon is float) && data.gamesWon >= 0 && data.gamesWon <= 1000000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPrivateInfo(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'authProvider', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'authProvider', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+        && data.authProvider is string && data.authProvider in ['google', 'microsoft', 'email']
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAssessment(data, userId) {
+      return data.keys().hasAll(['uid', 'skillName', 'scorePct', 'remedialTriggered', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'skillName', 'scorePct', 'remedialTriggered', 'notes', 'createdAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && data.skillName is string && data.skillName.size() >= 1 && data.skillName.size() <= 80
+        && (data.scorePct is int || data.scorePct is float) && data.scorePct >= 0 && data.scorePct <= 100
+        && data.remedialTriggered is bool
+        && (!data.keys().hasAny(['notes']) || (data.notes is string && data.notes.size() <= 400))
+        && data.createdAt is timestamp;
+    }
+
+    // Connectivity probe document (non-PII, read-only)
+    match /test/{docId} {
+      allow get: if docId == 'connection';
+      allow list, create, update, delete: if false;
+    }
+
+    // User Workspace Document (No PII)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if isVerifiedUser() && resource.data.uid == request.auth.uid;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName', 'headline', 'education', 'targetCareerId', 'streakPoints', 'streakDays', 'gamesWon', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      // Isolated PII subcollection
+      match /private/{docId} {
+        allow get: if isValidId(userId) && isValidId(docId) && docId == 'info' && isOwner(userId);
+        allow list: if false;
+        allow create: if isValidId(userId)
+          && isValidId(docId)
+          && docId == 'info'
+          && isOwner(userId)
+          && isValidPrivateInfo(incoming(), userId)
+          && incoming().updatedAt == request.time
+          && existsAfter(/databases/$(database)/documents/users/$(userId));
+        allow update: if isValidId(userId)
+          && isValidId(docId)
+          && docId == 'info'
+          && isOwner(userId)
+          && isValidPrivateInfo(incoming(), userId)
+          && incoming().uid == existing().uid
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'authProvider', 'updatedAt'])
+          && exists(/databases/$(database)/documents/users/$(userId));
+        allow delete: if false;
+      }
+
+      // Skill Assessments subcollection
+      match /assessments/{assessmentId} {
+        allow get: if isValidId(userId) && isValidId(assessmentId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.uid == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(assessmentId)
+          && isOwner(userId)
+          && isValidAssessment(incoming(), userId)
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+        allow update, delete: if false;
+      }
+    }
+  }
+}
