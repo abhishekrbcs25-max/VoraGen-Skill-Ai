@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Lock, X } from 'lucide-react';
 import { signInWithGooglePopup } from '../lib/firebase';
 import { Logo } from './Logo';
@@ -8,7 +8,7 @@ interface AuthModalProps {
   open: boolean;
   reason?: string;
   onClose: () => void;
-  onAuthSuccess: (userKey: string, nextProfile: UserProfile) => void;
+  onAuthSuccess: (userKey: string, nextProfile: UserProfile, token?: string) => void;
 }
 
 export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalProps) {
@@ -23,12 +23,26 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
   const [authError, setAuthError] = useState('');
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOauthStepProvider(null);
+        setAuthError('');
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const performServerAuth = async (params: {
     mode: 'register' | 'signin';
     name: string;
     email: string;
+    password?: string;
     authProvider: UserProfile['authProvider'];
   }) => {
     setIsSubmittingAuth(true);
@@ -41,12 +55,14 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
         body: JSON.stringify({
           name: params.name,
           email: params.email,
+          password: params.password,
           authProvider: params.authProvider,
         }),
       });
       const data = (await res.json()) as {
         ok?: boolean;
         key?: string;
+        token?: string;
         profile?: UserProfile;
         error?: string;
       };
@@ -58,7 +74,7 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
       setPasswordInput('');
       setEmailInput('');
       setNameInput('');
-      onAuthSuccess(data.key, data.profile);
+      onAuthSuccess(data.key, data.profile, data.token);
     } catch {
       setAuthError('Network error while connecting to VoraGen authentication.');
     } finally {
@@ -126,6 +142,7 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
       mode: authTab,
       name: cleanName,
       email: cleanEmail,
+      password: passwordInput,
       authProvider: 'email',
     });
   };

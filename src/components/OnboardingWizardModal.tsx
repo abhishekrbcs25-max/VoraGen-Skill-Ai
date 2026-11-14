@@ -52,6 +52,15 @@ export function OnboardingWizardModal({
     }
   }, [open, profile.id, profile.name, profile.education, profile.targetCareerId, profile.skills, roles]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onSkip();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onSkip]);
+
   if (!open) return null;
 
   const addSkill = (sName: string, sCat: UserSkill['category'], sLevel: number) => {

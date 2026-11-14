@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Award,
   Check,
@@ -20,7 +20,7 @@ interface ProfileAuthViewProps {
   roles: CareerRole[];
   match: SkillMatchBreakdown;
   onUpdateProfile: (next: UserProfile) => void;
-  onAuthSuccess: (userKey: string, nextProfile: UserProfile) => void;
+  onAuthSuccess: (userKey: string, nextProfile: UserProfile, token?: string) => void;
   onSignOut: () => void;
   onResetDemo: () => void;
   onVerifySkill: (skillName: string) => void;
@@ -71,10 +71,24 @@ export function ProfileAuthView({
 
   const currentRole = roles.find((r) => r.id === profile.targetCareerId) ?? roles[0];
 
+  useEffect(() => {
+    if (!showAuthModal) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowAuthModal(false);
+        setOauthStepProvider(null);
+        setAuthError('');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showAuthModal]);
+
   const performServerAuth = async (params: {
     mode: 'register' | 'signin';
     name: string;
     email: string;
+    password?: string;
     authProvider: UserProfile['authProvider'];
   }) => {
     setIsSubmittingAuth(true);
@@ -87,12 +101,14 @@ export function ProfileAuthView({
         body: JSON.stringify({
           name: params.name,
           email: params.email,
+          password: params.password,
           authProvider: params.authProvider,
         }),
       });
       const data = (await res.json()) as {
         ok?: boolean;
         key?: string;
+        token?: string;
         profile?: UserProfile;
         error?: string;
       };
@@ -100,7 +116,7 @@ export function ProfileAuthView({
         setAuthError(data.error || 'Authentication failed. Please try again.');
         return;
       }
-      onAuthSuccess(data.key, data.profile);
+      onAuthSuccess(data.key, data.profile, data.token);
       setOauthStepProvider(null);
       setShowAuthModal(false);
       setPasswordInput('');
@@ -174,6 +190,7 @@ export function ProfileAuthView({
       mode: authTab,
       name: cleanName,
       email: cleanEmail,
+      password: passwordInput,
       authProvider: 'email',
     });
   };

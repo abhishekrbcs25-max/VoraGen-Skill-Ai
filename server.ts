@@ -27,6 +27,14 @@ import {
   TtlResponseCache,
   type GeminiTextModel,
 } from './src/utils/geminiResilience.ts';
+import {
+  hashPassword,
+  signSessionToken,
+  SlidingWindowRateLimiter,
+  verifyPassword,
+  verifySessionToken,
+} from './src/utils/securityHelpers.ts';
+import { sanitizeTextField, sanitizeUserProfile } from './src/utils/validation.ts';
 import { requireAuth, type AuthRequest } from './src/middleware/auth.ts';
 import {
   getOrCreateUser,
@@ -40,6 +48,7 @@ import type { AIVideoLesson, InterviewEvaluation, MultiAgentReport, UserProfile 
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.resolve(process.cwd(), '.pathforge-data');
 const PROFILE_FILE = path.join(DATA_DIR, 'profiles.json');
+const CREDENTIALS_FILE = path.join(DATA_DIR, 'credentials.json');
 
 function ensureDataStore(): Record<string, UserProfile> {
   try {
@@ -69,8 +78,36 @@ function saveDataStore(store: Record<string, UserProfile>): void {
   }
 }
 
+function ensureCredentialsStore(): Record<string, string> {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(CREDENTIALS_FILE)) {
+      fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify({}, null, 2));
+      return {};
+    }
+    return JSON.parse(fs.readFileSync(CREDENTIALS_FILE, 'utf-8')) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+function saveCredentialsStore(store: Record<string, string>): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(store, null, 2));
+  } catch {
+    // Non-fatal in read-only sandboxes
+  }
+}
+
 const modelCooldowns = new ModelCooldownTracker();
 const collaborateCache = new TtlResponseCache<MultiAgentReport>(10 * 60_000, 40);
+const authLimiter = new SlidingWindowRateLimiter(30, 60_000);
+const aiLimiter = new SlidingWindowRateLimiter(60, 60_000);
 
 function getThinkingForModel(model: GeminiTextModel): ThinkingLevel {
   return model === 'gemini-3.1-flash-lite' ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW;
@@ -129,13 +166,51 @@ async function withTimeout<T>(promise: Promise<T>, ms = 8500): Promise<T> {
 
 async function startServer() {
   const app = express();
+  app.disable('x-powered-by');
   app.use(express.json({ limit: '12mb' }));
 
+  // Standard HTTP security headers
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), geolocation=()');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    next();
+  });
+
+  // Rate limit auth and AI endpoints against abuse
+  app.use('/api/auth', (req, res, next) => {
+    const ip = req.ip || 'unknown';
+    if (!authLimiter.allow(ip)) {
+      res.status(429).json({ error: 'Too many authentication attempts. Please wait a minute.' });
+      return;
+    }
+    next();
+  });
+
+  app.use('/api/ai', (req, res, next) => {
+    const ip = req.ip || 'unknown';
+    if (!aiLimiter.allow(ip)) {
+      res.status(429).json({ error: 'AI rate limit reached. Please retry in a moment.' });
+      return;
+    }
+    next();
+  });
+
   let profileStore = ensureDataStore();
+  let credentialsStore = ensureCredentialsStore();
+
+  function verifyProfileAccess(req: express.Request, key: string): boolean {
+    if (!key || key === 'default') return false;
+    const headerToken = typeof req.headers['x-voragen-token'] === 'string'
+      ? req.headers['x-voragen-token']
+      : '';
+    return verifySessionToken(headerToken, key).valid;
+  }
 
   // Health check
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, service: 'Voragen Adaptive AI Platform' });
+    res.json({ ok: true, service: 'VoraGen Skill AI Platform' });
   });
 
   // Safe Google Maps key check (returns runtime env key if Vite compile-time var wasn't set)
@@ -145,20 +220,20 @@ async function startServer() {
     res.json({ hasKey: Boolean(apiKey), apiKey });
   });
 
-  // Get active authenticated learner profile (no default/sample profile exposed)
+  // Get active authenticated learner profile (requires valid signed session token)
   app.get('/api/profile', (req, res) => {
     const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
-    if (!key || key === 'default' || !profileStore[key]) {
+    if (!verifyProfileAccess(req, key) || !profileStore[key]) {
       res.status(401).json({ error: 'Authentication required' });
       return;
     }
     res.json(profileStore[key]);
   });
 
-  // Persist learner profile updates (authenticated users only)
+  // Persist learner profile updates (authenticated users only + sanitized)
   app.put('/api/profile', (req, res) => {
     const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
-    if (!key || key === 'default') {
+    if (!verifyProfileAccess(req, key)) {
       res.status(401).json({ error: 'Authentication required' });
       return;
     }
@@ -167,15 +242,20 @@ async function startServer() {
       res.status(400).json({ error: 'Invalid profile payload' });
       return;
     }
-    profileStore[key] = body;
+    const sanitized = sanitizeUserProfile({
+      ...body,
+      email: key,
+      isSignedIn: true,
+    });
+    profileStore[key] = sanitized;
     saveDataStore(profileStore);
-    res.json({ ok: true, profile: body });
+    res.json({ ok: true, profile: sanitized });
   });
 
   // Clear signed-in user workspace back to a clean empty profile
   app.post('/api/profile/reset', (req, res) => {
     const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
-    if (!key || key === 'default') {
+    if (!verifyProfileAccess(req, key)) {
       res.status(401).json({ error: 'Authentication required' });
       return;
     }
@@ -192,57 +272,95 @@ async function startServer() {
     res.json({ ok: true, profile: fresh });
   });
 
-  // Register a brand-new user with completely fresh empty data
+  // Register a brand-new user with salted scrypt password hashing & fresh empty profile
   app.post('/api/auth/register', (req, res) => {
-    const { name, email, authProvider } = req.body as {
+    const { name, email, password, authProvider } = req.body as {
       name?: string;
       email?: string;
+      password?: string;
       authProvider?: UserProfile['authProvider'];
     };
-    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanEmail = sanitizeTextField(email || '', 160).toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
       res.status(400).json({ error: 'Valid email is required' });
       return;
     }
-    const cleanName = (name || '').trim() || cleanEmail.split('@')[0];
+    const provider = authProvider || 'email';
+    if (provider === 'email' && (!password || password.length < 6)) {
+      res.status(400).json({ error: 'Password must be at least 6 characters.' });
+      return;
+    }
+    if (profileStore[cleanEmail]) {
+      res.status(409).json({ error: 'An account with this email already exists. Please Sign In instead.' });
+      return;
+    }
+
+    const cleanName = sanitizeTextField(name || '', 80) || cleanEmail.split('@')[0];
+    if (provider === 'email' && password) {
+      credentialsStore[cleanEmail] = hashPassword(password);
+      saveCredentialsStore(credentialsStore);
+    }
+
     const freshProfile = createFreshUserProfile({
       name: cleanName,
       email: cleanEmail,
-      authProvider: authProvider || 'email',
+      authProvider: provider,
     });
     profileStore[cleanEmail] = freshProfile;
     saveDataStore(profileStore);
-    res.json({ ok: true, key: cleanEmail, profile: freshProfile });
+    const token = signSessionToken(cleanEmail);
+    res.json({ ok: true, key: cleanEmail, token, profile: freshProfile });
   });
 
-  // Log in existing user (or initialize fresh profile for Google/Microsoft OAuth first-timers)
+  // Log in existing user with password verification (or initialize OAuth first-timers)
   app.post('/api/auth/login', (req, res) => {
-    const { email, name, authProvider } = req.body as {
+    const { email, name, password, authProvider } = req.body as {
       email?: string;
       name?: string;
+      password?: string;
       authProvider?: UserProfile['authProvider'];
     };
-    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanEmail = sanitizeTextField(email || '', 160).toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
       res.status(400).json({ error: 'Valid email is required' });
       return;
     }
+    const provider = authProvider || 'email';
+
+    if (provider === 'email') {
+      const storedHash = credentialsStore[cleanEmail];
+      if (!profileStore[cleanEmail]) {
+        res.status(404).json({ error: 'No account found for this email. Switch to Create Account to register.' });
+        return;
+      }
+      if (storedHash && (!password || !verifyPassword(password, storedHash))) {
+        res.status(401).json({ error: 'Incorrect email or password.' });
+        return;
+      }
+      if (!storedHash && password && password.length >= 6) {
+        credentialsStore[cleanEmail] = hashPassword(password);
+        saveCredentialsStore(credentialsStore);
+      }
+    }
+
     if (profileStore[cleanEmail]) {
       const existing = { ...profileStore[cleanEmail], isSignedIn: true };
       profileStore[cleanEmail] = existing;
       saveDataStore(profileStore);
-      res.json({ ok: true, key: cleanEmail, isNew: false, profile: existing });
+      const token = signSessionToken(cleanEmail);
+      res.json({ ok: true, key: cleanEmail, token, isNew: false, profile: existing });
       return;
     }
 
     const freshProfile = createFreshUserProfile({
-      name: (name || '').trim() || cleanEmail.split('@')[0],
+      name: sanitizeTextField(name || '', 80) || cleanEmail.split('@')[0],
       email: cleanEmail,
-      authProvider: authProvider || 'email',
+      authProvider: provider,
     });
     profileStore[cleanEmail] = freshProfile;
     saveDataStore(profileStore);
-    res.json({ ok: true, key: cleanEmail, isNew: true, profile: freshProfile });
+    const token = signSessionToken(cleanEmail);
+    res.json({ ok: true, key: cleanEmail, token, isNew: true, profile: freshProfile });
   });
 
   // Cloud SQL Authenticated Learner Snapshot & Progress Endpoints

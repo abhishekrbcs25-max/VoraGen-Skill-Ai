@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Mail, Phone, ShieldCheck, User, X } from 'lucide-react';
 
 interface SupportModalProps {
@@ -6,6 +7,15 @@ interface SupportModalProps {
 }
 
 export function SupportModal({ open, onClose }: SupportModalProps) {
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (

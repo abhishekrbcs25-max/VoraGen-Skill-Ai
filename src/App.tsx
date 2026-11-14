@@ -1,23 +1,53 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { TopSearchBar } from './components/TopSearchBar';
 import { SupportModal } from './components/SupportModal';
 import { HomeView } from './components/HomeView';
 import { AuthModal } from './components/AuthModal';
-import { ProfileAuthView } from './components/ProfileAuthView';
-import { ResumeView } from './components/ResumeView';
-import { SkillAnalysisView } from './components/SkillAnalysisView';
-import { CareerMatchingView } from './components/CareerMatchingView';
-import { LearningRecommendationsView } from './components/LearningRecommendationsView';
-import { ProgressTrackingView } from './components/ProgressTrackingView';
-import { AIMentorView } from './components/AIMentorView';
-import { CareerLabView } from './components/CareerLabView';
-import { CodeArenaView } from './components/CodeArenaView';
-import { GamesView } from './components/GamesView';
-import { GlobalJobsView } from './components/GlobalJobsView';
-import { SettingsView } from './components/SettingsView';
 import { OnboardingWizardModal } from './components/OnboardingWizardModal';
-import { SkillArena3DGame } from './components/SkillArena3DGame';
+import { ErrorBoundary } from './components/ErrorBoundary';
+
+const ProfileAuthView = lazy(() =>
+  import('./components/ProfileAuthView').then((m) => ({ default: m.ProfileAuthView })),
+);
+const ResumeView = lazy(() =>
+  import('./components/ResumeView').then((m) => ({ default: m.ResumeView })),
+);
+const SkillAnalysisView = lazy(() =>
+  import('./components/SkillAnalysisView').then((m) => ({ default: m.SkillAnalysisView })),
+);
+const CareerMatchingView = lazy(() =>
+  import('./components/CareerMatchingView').then((m) => ({ default: m.CareerMatchingView })),
+);
+const LearningRecommendationsView = lazy(() =>
+  import('./components/LearningRecommendationsView').then((m) => ({
+    default: m.LearningRecommendationsView,
+  })),
+);
+const ProgressTrackingView = lazy(() =>
+  import('./components/ProgressTrackingView').then((m) => ({ default: m.ProgressTrackingView })),
+);
+const AIMentorView = lazy(() =>
+  import('./components/AIMentorView').then((m) => ({ default: m.AIMentorView })),
+);
+const CareerLabView = lazy(() =>
+  import('./components/CareerLabView').then((m) => ({ default: m.CareerLabView })),
+);
+const CodeArenaView = lazy(() =>
+  import('./components/CodeArenaView').then((m) => ({ default: m.CodeArenaView })),
+);
+const GamesView = lazy(() =>
+  import('./components/GamesView').then((m) => ({ default: m.GamesView })),
+);
+const GlobalJobsView = lazy(() =>
+  import('./components/GlobalJobsView').then((m) => ({ default: m.GlobalJobsView })),
+);
+const SettingsView = lazy(() =>
+  import('./components/SettingsView').then((m) => ({ default: m.SettingsView })),
+);
+const SkillArena3DGame = lazy(() =>
+  import('./components/SkillArena3DGame').then((m) => ({ default: m.SkillArena3DGame })),
+);
 import {
   CAREER_ROLES,
   LEARNING_CATALOG,
@@ -91,9 +121,15 @@ export default function App() {
     const saved = localStorage.getItem('pathforge-user-key') || '';
     if (!saved || saved === 'default') {
       localStorage.removeItem('pathforge-user-key');
+      localStorage.removeItem('pathforge-session-token');
       return '';
     }
     return saved;
+  });
+  const [sessionToken, setSessionToken] = useState<string>(() => {
+    const savedKey = localStorage.getItem('pathforge-user-key') || '';
+    if (!savedKey || savedKey === 'default') return '';
+    return localStorage.getItem('pathforge-session-token') || '';
   });
   const [profile, setProfile] = useState<UserProfile>(() =>
     createBlankUnauthenticatedProfile(),
@@ -198,16 +234,23 @@ export default function App() {
     return () => media.removeEventListener('change', applyTheme);
   }, [themeMode]);
 
-  // Load persisted profile ONLY when a signed-in userKey exists (zero default data before login)
+  // Load persisted profile ONLY when a signed-in userKey + sessionToken exists (zero default data before login)
   useEffect(() => {
-    if (!userKey || userKey === 'default') {
+    if (!userKey || userKey === 'default' || !sessionToken) {
+      if (userKey && !sessionToken) {
+        localStorage.removeItem('pathforge-user-key');
+        localStorage.removeItem('pathforge-session-token');
+        setUserKey('');
+      }
       setProfile(createBlankUnauthenticatedProfile());
       setAgentReport(null);
       return;
     }
 
     let cancelled = false;
-    fetch(`/api/profile?key=${encodeURIComponent(userKey)}`)
+    fetch(`/api/profile?key=${encodeURIComponent(userKey)}`, {
+      headers: { 'x-voragen-token': sessionToken },
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: UserProfile | null) => {
         if (cancelled) return;
@@ -224,14 +267,18 @@ export default function App() {
           }
         } else {
           localStorage.removeItem('pathforge-user-key');
+          localStorage.removeItem('pathforge-session-token');
           setUserKey('');
+          setSessionToken('');
           setProfile(createBlankUnauthenticatedProfile());
         }
       })
       .catch(() => {
         if (cancelled) return;
         localStorage.removeItem('pathforge-user-key');
+        localStorage.removeItem('pathforge-session-token');
         setUserKey('');
+        setSessionToken('');
         setProfile(createBlankUnauthenticatedProfile());
       });
 
@@ -239,7 +286,7 @@ export default function App() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userKey]);
+  }, [userKey, sessionToken]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -259,17 +306,22 @@ export default function App() {
     next: UserProfile,
     explicitKey?: string,
     bypassAuthCheck = false,
+    explicitToken?: string,
   ) => {
     if (!bypassAuthCheck && !profile.isSignedIn && !next.isSignedIn) {
       requireSignInForUpdate('update your profile or resume details');
       return;
     }
     const activeKey = explicitKey || userKey;
+    const activeToken = explicitToken || sessionToken;
     if (!activeKey || activeKey === 'default') return;
     setProfile(next);
     fetch(`/api/profile?key=${encodeURIComponent(activeKey)}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(activeToken ? { 'x-voragen-token': activeToken } : {}),
+      },
       body: JSON.stringify(next),
     }).catch(() => {
       // Non-fatal
@@ -583,7 +635,10 @@ export default function App() {
 
   const handleResetDemo = () => {
     if (!userKey) return;
-    fetch(`/api/profile/reset?key=${encodeURIComponent(userKey)}`, { method: 'POST' })
+    fetch(`/api/profile/reset?key=${encodeURIComponent(userKey)}`, {
+      method: 'POST',
+      headers: sessionToken ? { 'x-voragen-token': sessionToken } : {},
+    })
       .then((res) => res.json())
       .then((data: { profile?: UserProfile }) => {
         const resetProf =
@@ -614,8 +669,12 @@ export default function App() {
       });
   };
 
-  const handleAuthSuccess = (nextKey: string, nextProfile: UserProfile) => {
+  const handleAuthSuccess = (nextKey: string, nextProfile: UserProfile, nextToken?: string) => {
     localStorage.setItem('pathforge-user-key', nextKey);
+    if (nextToken) {
+      localStorage.setItem('pathforge-session-token', nextToken);
+      setSessionToken(nextToken);
+    }
     setUserKey(nextKey);
     setProfile(nextProfile);
     setAuthModalOpen(false);
@@ -664,7 +723,9 @@ export default function App() {
   const handleSignOut = () => {
     signOutFirebase().catch(() => {});
     localStorage.removeItem('pathforge-user-key');
+    localStorage.removeItem('pathforge-session-token');
     setUserKey('');
+    setSessionToken('');
     setProfile(createBlankUnauthenticatedProfile());
     setAgentReport(null);
     setNotifications([]);
@@ -791,13 +852,21 @@ export default function App() {
 
   if (show3DGame) {
     return (
-      <>
-        <SkillArena3DGame
-          bestScoreInitial={best3DScore}
-          autostart={initialQueryParams.autostart}
-          onWin={handleWin3DGame}
-          onExit={() => setShow3DGame(false)}
-        />
+      <ErrorBoundary>
+        <Suspense
+          fallback={
+            <div className="min-h-screen flex items-center justify-center bg-[#07090F] text-sm text-slate-300">
+              Loading 3D Skill Defender Arena...
+            </div>
+          }
+        >
+          <SkillArena3DGame
+            bestScoreInitial={best3DScore}
+            autostart={initialQueryParams.autostart}
+            onWin={handleWin3DGame}
+            onExit={() => setShow3DGame(false)}
+          />
+        </Suspense>
         <AuthModal
           open={authModalOpen}
           reason={authModalReason}
@@ -807,7 +876,7 @@ export default function App() {
           }}
           onAuthSuccess={handleAuthSuccess}
         />
-      </>
+      </ErrorBoundary>
     );
   }
 
@@ -817,6 +886,13 @@ export default function App() {
         settings.reduceMotion ? '[&_*]:transition-none' : ''
       }`}
     >
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-red-600 dark:focus:bg-blue-600 focus:text-white focus:text-xs focus:font-semibold"
+      >
+        Skip to main content
+      </a>
+
       {/* Left-Side Only Navigation */}
       <Sidebar
         activeSection={activeSection}
@@ -871,166 +947,179 @@ export default function App() {
         />
 
         <main
+          id="main-content"
+          tabIndex={-1}
           className={`flex-1 px-4 sm:px-8 lg:px-10 ${
             settings.compactLayout ? 'py-4 sm:py-5' : 'py-6 sm:py-8'
-          } max-w-[1240px] w-full mx-auto`}
+          } max-w-[1240px] w-full mx-auto outline-none`}
         >
           {toastMessage && (
             <div
               role="status"
+              aria-live="polite"
               className="mb-6 rounded-xl border border-emerald-500/40 dark:border-amber-400/40 bg-emerald-50 dark:bg-amber-500/10 px-4 py-3 text-xs font-medium text-emerald-900 dark:text-amber-200"
             >
               {toastMessage}
             </div>
           )}
 
-          {activeSection === 'home' && (
-            <HomeView
-              profile={profile}
-              targetRole={targetRole}
-              match={match}
-              onNavigate={setActiveSection}
-              onOpenAuthenticityTest={() => openAuthenticityForSkill()}
-              onRunMultiAgentSync={() =>
-                runMultiAgentCollaboration(profile, 'Home Dashboard Sync')
+          <ErrorBoundary>
+            <Suspense
+              fallback={
+                <div className="py-12 text-center text-xs text-slate-500 dark:text-slate-400">
+                  Loading workspace module...
+                </div>
               }
-              isSyncingAI={isSyncingAI}
-            />
-          )}
+            >
+              {activeSection === 'home' && (
+                <HomeView
+                  profile={profile}
+                  targetRole={targetRole}
+                  match={match}
+                  onNavigate={setActiveSection}
+                  onOpenAuthenticityTest={() => openAuthenticityForSkill()}
+                  onRunMultiAgentSync={() =>
+                    runMultiAgentCollaboration(profile, 'Home Dashboard Sync')
+                  }
+                  isSyncingAI={isSyncingAI}
+                />
+              )}
 
-          {activeSection === 'profile' && (
-            <ProfileAuthView
-              profile={profile}
-              roles={CAREER_ROLES}
-              match={match}
-              onUpdateProfile={(next) => persistProfile(next)}
-              onAuthSuccess={handleAuthSuccess}
-              onSignOut={handleSignOut}
-              onResetDemo={handleResetDemo}
-              onVerifySkill={(skillName) => openAuthenticityForSkill(skillName)}
-            />
-          )}
+              {activeSection === 'profile' && (
+                <ProfileAuthView
+                  profile={profile}
+                  roles={CAREER_ROLES}
+                  match={match}
+                  onUpdateProfile={(next) => persistProfile(next)}
+                  onAuthSuccess={handleAuthSuccess}
+                  onSignOut={handleSignOut}
+                  onResetDemo={handleResetDemo}
+                  onVerifySkill={(skillName) => openAuthenticityForSkill(skillName)}
+                />
+              )}
 
-          {activeSection === 'resume' && (
-            <ResumeView
-              profile={profile}
-              targetRole={targetRole}
-              onUpdateProfile={(next) => persistProfile(next)}
-              onNotifyUpdate={(title, detail) =>
-                pushNotification({
-                  title,
-                  detail,
-                  category: 'profile',
-                  targetSection: 'resume',
-                })
-              }
-              onOpenAuthModal={() => {
-                setAuthModalReason(undefined);
-                setAuthModalOpen(true);
-              }}
-            />
-          )}
+              {activeSection === 'resume' && (
+                <ResumeView
+                  profile={profile}
+                  targetRole={targetRole}
+                  onUpdateProfile={(next) => persistProfile(next)}
+                  onNotifyUpdate={(title, detail) =>
+                    pushNotification({
+                      title,
+                      detail,
+                      category: 'profile',
+                      targetSection: 'resume',
+                    })
+                  }
+                  onOpenAuthModal={() => {
+                    setAuthModalReason(undefined);
+                    setAuthModalOpen(true);
+                  }}
+                />
+              )}
 
-          {activeSection === 'skill-analysis' && (
-            <SkillAnalysisView
-              profile={profile}
-              targetRole={targetRole}
-              match={match}
-              agentReport={agentReport}
-              isSyncingAI={isSyncingAI}
-              onRunMultiAgentSync={(reason) => runMultiAgentCollaboration(profile, reason)}
-              onSubmitAssessment={handleAssessmentSubmit}
-              onVerifySkillAuthenticity={handleVerifySkillAuthenticity}
-              initialSkill={skillAnalysisTarget}
-              initialMode={skillAnalysisMode}
-            />
-          )}
+              {activeSection === 'skill-analysis' && (
+                <SkillAnalysisView
+                  profile={profile}
+                  targetRole={targetRole}
+                  match={match}
+                  agentReport={agentReport}
+                  isSyncingAI={isSyncingAI}
+                  onRunMultiAgentSync={(reason) => runMultiAgentCollaboration(profile, reason)}
+                  onSubmitAssessment={handleAssessmentSubmit}
+                  onVerifySkillAuthenticity={handleVerifySkillAuthenticity}
+                  initialSkill={skillAnalysisTarget}
+                  initialMode={skillAnalysisMode}
+                />
+              )}
 
-          {activeSection === 'career-matching' && (
-            <CareerMatchingView
-              profile={profile}
-              roles={CAREER_ROLES}
-              activeRole={targetRole}
-              activeMatch={match}
-              onSelectCareerGoal={handleSelectCareerGoal}
-              initialRoleId={searchSubTarget}
-            />
-          )}
+              {activeSection === 'career-matching' && (
+                <CareerMatchingView
+                  profile={profile}
+                  roles={CAREER_ROLES}
+                  activeRole={targetRole}
+                  activeMatch={match}
+                  onSelectCareerGoal={handleSelectCareerGoal}
+                  initialRoleId={searchSubTarget}
+                />
+              )}
 
-          {activeSection === 'learning-recommendations' && (
-            <LearningRecommendationsView
-              profile={profile}
-              targetRole={targetRole}
-              roadmap={adaptiveRoadmap}
-              onToggleCompleteModule={handleToggleCompleteModule}
-            />
-          )}
+              {activeSection === 'learning-recommendations' && (
+                <LearningRecommendationsView
+                  profile={profile}
+                  targetRole={targetRole}
+                  roadmap={adaptiveRoadmap}
+                  onToggleCompleteModule={handleToggleCompleteModule}
+                />
+              )}
 
-          {activeSection === 'progress-tracking' && (
-            <ProgressTrackingView
-              profile={profile}
-              targetRole={targetRole}
-              match={match}
-            />
-          )}
+              {activeSection === 'progress-tracking' && (
+                <ProgressTrackingView
+                  profile={profile}
+                  targetRole={targetRole}
+                  match={match}
+                />
+              )}
 
-          {activeSection === 'ai-mentor' && (
-            <AIMentorView
-              profile={profile}
-              targetRole={targetRole}
-              match={match}
-              defaultVideoVoice={settings.defaultVideoVoice}
-              initialSubTab={searchSubTarget}
-            />
-          )}
+              {activeSection === 'ai-mentor' && (
+                <AIMentorView
+                  profile={profile}
+                  targetRole={targetRole}
+                  match={match}
+                  defaultVideoVoice={settings.defaultVideoVoice}
+                  initialSubTab={searchSubTarget}
+                />
+              )}
 
-          {activeSection === 'career-lab' && (
-            <CareerLabView
-              profile={profile}
-              targetRole={targetRole}
-              match={match}
-              onUpdateProfile={(next) => persistProfile(next)}
-              onNavigate={setActiveSection}
-            />
-          )}
+              {activeSection === 'career-lab' && (
+                <CareerLabView
+                  profile={profile}
+                  targetRole={targetRole}
+                  match={match}
+                  onUpdateProfile={(next) => persistProfile(next)}
+                  onNavigate={setActiveSection}
+                />
+              )}
 
-          {activeSection === 'code-arena' && (
-            <CodeArenaView
-              profile={profile}
-              onSolveChallenge={handleSolveChallenge}
-              initialChallengeId={searchSubTarget}
-            />
-          )}
+              {activeSection === 'code-arena' && (
+                <CodeArenaView
+                  profile={profile}
+                  onSolveChallenge={handleSolveChallenge}
+                  initialChallengeId={searchSubTarget}
+                />
+              )}
 
-          {activeSection === 'games' && (
-            <GamesView
-              gamesWon={profile.gamesWon}
-              onWinGame={handleWinGame}
-              onLaunch3DGame={() => setShow3DGame(true)}
-              initialGame={searchSubTarget}
-            />
-          )}
+              {activeSection === 'games' && (
+                <GamesView
+                  gamesWon={profile.gamesWon}
+                  onWinGame={handleWinGame}
+                  onLaunch3DGame={() => setShow3DGame(true)}
+                  initialGame={searchSubTarget}
+                />
+              )}
 
-          {activeSection === 'global-jobs' && (
-            <GlobalJobsView
-              profile={profile}
-              readinessPct={match.overallReadinessPct}
-              onApplyForJob={handleApplyForJob}
-              initialCompanyId={searchSubTarget}
-            />
-          )}
+              {activeSection === 'global-jobs' && (
+                <GlobalJobsView
+                  profile={profile}
+                  readinessPct={match.overallReadinessPct}
+                  onApplyForJob={handleApplyForJob}
+                  initialCompanyId={searchSubTarget}
+                />
+              )}
 
-          {activeSection === 'settings' && (
-            <SettingsView
-              themeMode={themeMode}
-              onChangeTheme={setThemeMode}
-              settings={settings}
-              onUpdateSettings={updateSettings}
-              profile={profile}
-              onResetDemo={handleResetDemo}
-              onOpenSupport={() => setSupportOpen(true)}
-            />
-          )}
+              {activeSection === 'settings' && (
+                <SettingsView
+                  themeMode={themeMode}
+                  onChangeTheme={setThemeMode}
+                  settings={settings}
+                  onUpdateSettings={updateSettings}
+                  profile={profile}
+                  onResetDemo={handleResetDemo}
+                  onOpenSupport={() => setSupportOpen(true)}
+                />
+              )}
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
 
