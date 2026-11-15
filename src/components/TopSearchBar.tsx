@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
+  Award,
   Bell,
   Briefcase,
   CheckCheck,
@@ -30,6 +31,7 @@ interface TopSearchBarProps {
   onSelectNotification: (notification: AppNotification) => void;
   onMarkAllNotificationsRead: () => void;
   onClearNotifications: () => void;
+  onOpenNotificationsCenter?: () => void;
   onOpenSettings: () => void;
   onOpenAuthModal: () => void;
   onOpenMobileMenu: () => void;
@@ -49,6 +51,8 @@ function getNotificationIcon(category: NotificationCategory) {
       return Gamepad2;
     case 'profile':
       return UserCheck;
+    case 'cert':
+      return Award;
     default:
       return Settings;
   }
@@ -63,6 +67,7 @@ export function TopSearchBar({
   onSelectNotification,
   onMarkAllNotificationsRead,
   onClearNotifications,
+  onOpenNotificationsCenter,
   onOpenSettings,
   onOpenAuthModal,
   onOpenMobileMenu,
@@ -382,6 +387,21 @@ export function TopSearchBar({
                         </button>
                       );
                     })}
+                  </div>
+                )}
+
+                {onOpenNotificationsCenter && (
+                  <div className="px-4 py-2.5 border-t border-slate-200 dark:border-white/10 bg-[#F4F7FB] dark:bg-[#05070B] flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNotifOpen(false);
+                        onOpenNotificationsCenter();
+                      }}
+                      className="text-xs font-semibold text-[#0B2545] dark:text-amber-400 hover:underline"
+                    >
+                      Open Notifications &amp; Messages Inbox →
+                    </button>
                   </div>
                 )}
               </div>

@@ -39,9 +39,13 @@ test('CAREER_ROLES, LEARNING_CATALOG, MENTOR_STAFF, and DIAGNOSTIC_QUIZZES maint
 
   assert.equal(MENTOR_STAFF.length, 3);
   for (const questions of Object.values(DIAGNOSTIC_QUIZZES)) {
-    assert.ok(questions.length >= 3);
+    assert.ok(questions.length >= 20);
     for (const q of questions) {
-      assert.ok(q.correctIndex >= 0 && q.correctIndex < q.options.length);
+      if (q.kind === 'coding') {
+        assert.ok((q.testCases?.length ?? 0) >= 1, `Coding problem ${q.id} must have test cases`);
+      } else {
+        assert.ok(q.correctIndex >= 0 && q.correctIndex < q.options.length);
+      }
       assert.ok(q.explanation.length > 10);
     }
   }

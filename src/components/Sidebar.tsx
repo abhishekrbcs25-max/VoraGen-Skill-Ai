@@ -1,26 +1,45 @@
 import {
   Activity,
   Award,
+  Bell,
+  BookOpen,
   Briefcase,
+  Building2,
+  ClipboardList,
   Code2,
   Compass,
+  CreditCard,
   FileText,
+  FolderGit2,
   Gamepad2,
   GraduationCap,
   HelpCircle,
   Home,
+  Info,
   Laptop,
   Mic,
   Moon,
   Settings,
+  Shield,
+  ShieldCheck,
   Sparkles,
   Sun,
   Target,
   User,
+  Users,
   X,
 } from 'lucide-react';
+import { calculateProfileCompletion } from '../utils/profileCompletion';
 import type { NavSection, ThemeMode, UserProfile } from '../types';
 import { Logo } from './Logo';
+
+const ROLE_SHORT_LABELS: Record<NonNullable<UserProfile['role']>, string> = {
+  student: 'Student',
+  'working-professional': 'Professional',
+  'job-seeker': 'Job Seeker',
+  employer: 'Employer',
+  admin: 'Admin',
+};
 
 interface SidebarProps {
   activeSection: NavSection;
@@ -35,20 +54,53 @@ interface SidebarProps {
   onCloseMobile: () => void;
 }
 
-const NAV_ITEMS: Array<{ id: NavSection; label: string; icon: typeof Home }> = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'profile', label: 'User Profile', icon: User },
-  { id: 'resume', label: 'Resume', icon: FileText },
-  { id: 'skill-analysis', label: 'Skill Analysis', icon: Activity },
-  { id: 'career-matching', label: 'Career Matching', icon: Target },
-  { id: 'learning-recommendations', label: 'Learning Recommendations', icon: GraduationCap },
-  { id: 'progress-tracking', label: 'Progress Tracking', icon: Compass },
-  { id: 'ai-mentor', label: 'AI Mentor', icon: Sparkles },
-  { id: 'career-lab', label: 'Career Lab', icon: Mic },
-  { id: 'code-arena', label: 'Code Arena', icon: Code2 },
-  { id: 'games', label: 'VoraGen Games', icon: Gamepad2 },
-  { id: 'global-jobs', label: 'Global Jobs', icon: Briefcase },
-  { id: 'settings', label: 'Settings', icon: Settings },
+const NAV_GROUPS: Array<{
+  heading: string;
+  items: Array<{ id: NavSection; label: string; icon: typeof Home }>;
+}> = [
+  {
+    heading: 'Overview',
+    items: [
+      { id: 'home', label: 'Home', icon: Home },
+      { id: 'profile', label: 'User Profile', icon: User },
+      { id: 'progress-tracking', label: 'Progress Tracking', icon: Compass },
+      { id: 'notifications-center', label: 'Inbox & Alerts', icon: Bell },
+    ],
+  },
+  {
+    heading: 'Learning & Verification',
+    items: [
+      { id: 'courses', label: 'Courses Hub', icon: BookOpen },
+      { id: 'learning-recommendations', label: 'Learning Roadmap', icon: GraduationCap },
+      { id: 'skill-analysis', label: 'Skill & Aptitude', icon: Activity },
+      { id: 'ai-mentor', label: 'AI Assistant', icon: Sparkles },
+      { id: 'projects', label: 'Projects & Labs', icon: FolderGit2 },
+      { id: 'certifications', label: 'Certs & Passport', icon: ShieldCheck },
+      { id: 'code-arena', label: 'Code Arena', icon: Code2 },
+      { id: 'games', label: 'VoraGen Games', icon: Gamepad2 },
+    ],
+  },
+  {
+    heading: 'Careers & Hiring',
+    items: [
+      { id: 'career-matching', label: 'Career Matching', icon: Target },
+      { id: 'global-jobs', label: 'Find Jobs & Fairs', icon: Briefcase },
+      { id: 'applications', label: 'My Applications', icon: ClipboardList },
+      { id: 'resume', label: 'Resume & Letters', icon: FileText },
+      { id: 'career-lab', label: 'Interview Prep', icon: Mic },
+    ],
+  },
+  {
+    heading: 'Portals & Governance',
+    items: [
+      { id: 'community', label: 'Community & Mentors', icon: Users },
+      { id: 'employer-portal', label: 'Employer Portal', icon: Building2 },
+      { id: 'admin-portal', label: 'Admin Portal', icon: Shield },
+      { id: 'pricing', label: 'Pricing & Billing', icon: CreditCard },
+      { id: 'help-center', label: 'About & Help Center', icon: Info },
+      { id: 'settings', label: 'Settings', icon: Settings },
+    ],
+  },
 ];
 
 export function Sidebar({
@@ -63,6 +115,9 @@ export function Sidebar({
   mobileOpen,
   onCloseMobile,
 }: SidebarProps) {
+  const completionPct = profile.isSignedIn ? calculateProfileCompletion(profile).percentage : 0;
+  const roleLabel = ROLE_SHORT_LABELS[profile.role || 'student'];
+
   const sidebarBody = (
     <div className="flex h-full flex-col justify-between bg-[#F4F7FB] dark:bg-[#0A1628] border-r border-slate-200 dark:border-[#1E3A5F]/60 px-4 py-5 select-none">
       {/* Top-Left Brand + Primary Left-Side Nav */}
@@ -119,7 +174,9 @@ export function Sidebar({
             </span>
           </div>
           <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 truncate">
-            {profile.isSignedIn ? `Signed in (${profile.authProvider})` : 'Sign in to update & save'}
+            {profile.isSignedIn
+              ? `${roleLabel} · Profile ${completionPct}%`
+              : 'Sign in to update & save'}
           </p>
           <div className="mt-2 h-1.5 w-full rounded-full bg-slate-200 dark:bg-[#102240] overflow-hidden">
             <div
@@ -130,30 +187,37 @@ export function Sidebar({
         </button>
 
         {/* Left Navigation Links */}
-        <nav aria-label="Main navigation" className="space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeSection === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  onSelectSection(item.id);
-                  onCloseMobile();
-                }}
-                aria-current={isActive ? 'page' : undefined}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-colors whitespace-nowrap ${
-                  isActive
-                    ? 'bg-[#0B2545] text-white dark:bg-[#1D4ED8] dark:text-white shadow-sm'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-[#0B2545]/8 dark:hover:bg-white/5 hover:text-[#0B2545] dark:hover:text-white'
-                }`}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </button>
-            );
-          })}
+        <nav aria-label="Main navigation" className="space-y-4">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.heading} className="space-y-1">
+              <p className="px-3 text-[11px] font-semibold tracking-wide text-slate-500 dark:text-slate-400">
+                {group.heading}
+              </p>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeSection === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      onSelectSection(item.id);
+                      onCloseMobile();
+                    }}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors whitespace-nowrap ${
+                      isActive
+                        ? 'bg-[#0B2545] text-white dark:bg-[#1D4ED8] dark:text-white shadow-sm'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-[#0B2545]/8 dark:hover:bg-white/5 hover:text-[#0B2545] dark:hover:text-white'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
       </div>
 
@@ -207,7 +271,7 @@ export function Sidebar({
           </span>
         </div>
 
-        {/* Help & Support with Abhishek R */}
+        {/* Help & Support — Vora Generation Network */}
         <button
           type="button"
           onClick={onOpenSupport}
@@ -217,11 +281,11 @@ export function Sidebar({
             <HelpCircle className="w-3.5 h-3.5 text-emerald-700 dark:text-amber-400 shrink-0" />
             <span>Help & Support</span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-            Abhishek R · 9745169331
+          <p className="mt-1 text-[11px] font-medium text-slate-700 dark:text-slate-200 leading-snug">
+            Vora Generation Network
           </p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-            abhishekr.bcs25@gmail.com
+            voragenerationnetwork@gmail.com
           </p>
         </button>
       </div>

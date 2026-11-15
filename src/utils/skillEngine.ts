@@ -1,4 +1,5 @@
 import type {
+  AssessmentQuestion,
   AssessmentRecord,
   CareerRole,
   Certification,
@@ -36,10 +37,17 @@ export function calculateSkillMatch(
   const weakSkillNames: string[] = [];
   const strongSkillNames: string[] = [];
 
+  let verifiedCount = 0;
+
   for (const req of role.requiredSkills) {
     totalWeight += req.weight;
     const found = findUserSkill(skills, req.name);
-    const currentLevel = found ? Math.max(0, Math.min(100, found.level)) : 0;
+    if (found && found.verified) {
+      verifiedCount += 1;
+    }
+    // Only exam-verified skills contribute to goal progress (new/unverified users start at 0%)
+    const currentLevel =
+      found && found.verified ? Math.max(0, Math.min(100, found.level)) : 0;
     const ratio = Math.min(1, currentLevel / Math.max(1, req.targetLevel));
     earnedWeight += req.weight * ratio;
 
@@ -73,10 +81,10 @@ export function calculateSkillMatch(
   const baseSkillMatchPct =
     totalWeight > 0 ? Math.round((earnedWeight / totalWeight) * 100) : 0;
 
-  // Certifications & Projects provide up to +12% readiness boost when aligned
+  // Portfolio certifications & projects add readiness bonus only after passing at least one skill test/exam
   const certBoost = Math.min(6, certifications.length * 2);
   const projectBoost = Math.min(6, projects.length * 2);
-  const portfolioBonusPct = Math.min(12, certBoost + projectBoost);
+  const portfolioBonusPct = verifiedCount > 0 ? Math.min(12, certBoost + projectBoost) : 0;
 
   const overallReadinessPct = Math.min(100, baseSkillMatchPct + portfolioBonusPct);
 
@@ -121,22 +129,20 @@ export function recalibrateFromAssessment(
 
   if (existingIndex >= 0) {
     const prev = updatedSkills[existingIndex];
-    // Weighted blend so a poor assessment visibly pulls down inflated self-ratings,
-    // and strong assessment lifts verified level
     const newLevel = remedialTriggered
       ? Math.min(prev.level, Math.max(20, Math.round((prev.level + clampedScore) / 2)))
       : Math.max(prev.level, clampedScore);
     updatedSkills[existingIndex] = {
       ...prev,
       level: newLevel,
-      verified: clampedScore >= 70,
+      verified: clampedScore >= remedialThresholdPct,
     };
   } else {
     updatedSkills.push({
       name: skillName,
       level: clampedScore,
       category: reqRoleSkill?.category ?? 'Foundations',
-      verified: clampedScore >= 70,
+      verified: clampedScore >= remedialThresholdPct,
     });
   }
 
@@ -532,5 +538,49 @@ export function buildProductivityHeatmap(
     peakDateLabel,
   };
 }
+
+export function gradeInteractiveAssessment(
+  questions: AssessmentQuestion[],
+  mcqAnswers: Record<string, number>,
+  codingPassMap: Record<string, boolean>,
+): {
+  correctCount: number;
+  totalQuestions: number;
+  scorePct: number;
+  mcqCorrect: number;
+  mcqTotal: number;
+  codingPassed: number;
+  codingTotal: number;
+} {
+  let mcqCorrect = 0;
+  let mcqTotal = 0;
+  let codingPassed = 0;
+  let codingTotal = 0;
+
+  for (const q of questions) {
+    if (q.kind === 'coding') {
+      codingTotal += 1;
+      if (codingPassMap[q.id]) codingPassed += 1;
+    } else {
+      mcqTotal += 1;
+      if (mcqAnswers[q.id] === q.correctIndex) mcqCorrect += 1;
+    }
+  }
+
+  const totalQuestions = questions.length;
+  const correctCount = mcqCorrect + codingPassed;
+  const scorePct = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+
+  return {
+    correctCount,
+    totalQuestions,
+    scorePct,
+    mcqCorrect,
+    mcqTotal,
+    codingPassed,
+    codingTotal,
+  };
+}
+
 
 

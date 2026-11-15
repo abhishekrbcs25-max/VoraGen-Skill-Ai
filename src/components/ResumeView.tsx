@@ -12,11 +12,19 @@ import {
   Plus,
   Printer,
   Save,
+  Search,
   ShieldCheck,
   Sparkles,
   Trash2,
   User,
 } from 'lucide-react';
+import { findIssuerByNameOrId, searchIssuers } from '../data/issuersCatalog';
+import { sanitizeIsoDate } from '../utils/certExpiry';
+import {
+  RESUME_TEMPLATE_META,
+  generateCoverLetterDraft,
+  scoreResumeAtsAndGrammar,
+} from '../utils/platformEngines';
 import {
   buildResumeMarkdown,
   calculateResumeCompleteness,
@@ -24,7 +32,16 @@ import {
   sortEducationEntries,
 } from '../utils/resumeHelpers';
 import { sanitizeExternalUrl } from '../utils/validation';
-import type { CareerRole, EducationEntry, UserProfile, UserSkill } from '../types';
+import { IssuerLogo } from './IssuerLogo';
+import type {
+  CareerRole,
+  CoverLetterItem,
+  EducationEntry,
+  ResumeTemplateId,
+  ResumeVersion,
+  UserProfile,
+  UserSkill,
+} from '../types';
 
 interface ResumeViewProps {
   profile: UserProfile;
@@ -93,10 +110,32 @@ export function ResumeView({
   // Certification quick-add form
   const [certTitle, setCertTitle] = useState('');
   const [certIssuer, setCertIssuer] = useState('');
+  const [certIssuerLogoId, setCertIssuerLogoId] = useState('');
   const [certYear, setCertYear] = useState('2026');
+  const [certExpiryDate, setCertExpiryDate] = useState('');
   const [certCredentialId, setCertCredentialId] = useState('');
+  const [certCredentialUrl, setCertCredentialUrl] = useState('');
+  const [issuerSearchInput, setIssuerSearchInput] = useState('');
+  const [issuerAppliedQuery, setIssuerAppliedQuery] = useState('');
+
+  const matchingIssuers = useMemo(
+    () => searchIssuers(issuerAppliedQuery),
+    [issuerAppliedQuery],
+  );
 
   const [copiedMd, setCopiedMd] = useState(false);
+
+  // Resume Templates, Multiple Versions, ATS Optimizer & Cover Letter Generator state
+  const activeTemplate: ResumeTemplateId = profile.resumeTemplate || 'classic-executive';
+  const [versionTitle, setVersionTitle] = useState(`${targetRole.title} v1`);
+  const [atsTargetJd, setAtsTargetJd] = useState(
+    `Seeking ${targetRole.title} proficient in ${targetRole.requiredSkills.map((s) => s.name).join(', ')}.`,
+  );
+  const [clCompany, setClCompany] = useState('Google');
+  const [clRole, setClRole] = useState(targetRole.title);
+  const [clTone, setClTone] = useState<CoverLetterItem['tone']>('Impact-Driven');
+  const [clDraft, setClDraft] = useState('');
+  const [copiedCl, setCopiedCl] = useState(false);
 
   const previewProfile = useMemo<UserProfile>(
     () => ({
@@ -123,6 +162,81 @@ export function ResumeView({
     () => buildResumeMarkdown(previewProfile, targetRole.title),
     [previewProfile, targetRole.title],
   );
+
+  const atsAnalysis = useMemo(
+    () => scoreResumeAtsAndGrammar(previewProfile, atsTargetJd),
+    [previewProfile, atsTargetJd],
+  );
+
+  const handleSelectTemplate = (tpl: ResumeTemplateId) => {
+    onUpdateProfile({ ...previewProfile, resumeTemplate: tpl });
+  };
+
+  const handleSaveResumeVersion = (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = versionTitle.trim() || `${targetRole.title} Snapshot`;
+    const newVersion: ResumeVersion = {
+      id: `rv-${Date.now()}`,
+      title,
+      template: activeTemplate,
+      updatedAt: new Date().toISOString().split('T')[0],
+      headline: previewProfile.headline,
+      summary: previewProfile.resumeSummary || '',
+      skillsSnapshot: previewProfile.skills.map((s) => s.name),
+      atsScore: atsAnalysis.atsScorePct,
+    };
+    onUpdateProfile({
+      ...previewProfile,
+      resumeVersions: [newVersion, ...(profile.resumeVersions || [])],
+    });
+    if (profile.isSignedIn) {
+      onNotifyUpdate?.('Resume Version Saved', `Saved "${title}" (${atsAnalysis.atsScorePct}% ATS fit).`);
+    }
+  };
+
+  const handleLoadResumeVersion = (ver: ResumeVersion) => {
+    setDraftHeadline(ver.headline);
+    setDraftSummary(ver.summary);
+    onUpdateProfile({
+      ...previewProfile,
+      resumeTemplate: ver.template,
+      headline: ver.headline,
+      resumeSummary: ver.summary,
+    });
+  };
+
+  const handleGenerateCoverLetter = (e: React.FormEvent) => {
+    e.preventDefault();
+    const draft = generateCoverLetterDraft({
+      candidateName: previewProfile.name || 'Candidate',
+      companyName: clCompany,
+      roleTitle: clRole,
+      tone: clTone,
+      topSkills: previewProfile.skills.map((s) => s.name),
+      highlightProject: previewProfile.projects[0]?.title,
+    });
+    setClDraft(draft);
+  };
+
+  const handleSaveCoverLetter = () => {
+    if (!clDraft.trim()) return;
+    const item: CoverLetterItem = {
+      id: `cl-${Date.now()}`,
+      title: `${clCompany} · ${clRole}`,
+      companyName: clCompany,
+      roleTitle: clRole,
+      tone: clTone,
+      content: clDraft,
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+    onUpdateProfile({
+      ...previewProfile,
+      coverLetters: [item, ...(profile.coverLetters || [])],
+    });
+    if (profile.isSignedIn) {
+      onNotifyUpdate?.('Cover Letter Saved', `Saved tailored cover letter for ${clCompany}.`);
+    }
+  };
 
   const updateDraftAndSync = (patch: Partial<UserProfile>) => {
     const merged: UserProfile = {
@@ -254,6 +368,9 @@ export function ResumeView({
     const cleanTitle = certTitle.trim();
     const cleanIssuer = certIssuer.trim();
     if (!cleanTitle || !cleanIssuer) return;
+    const safeUrl = sanitizeExternalUrl(certCredentialUrl);
+    const safeExpiry = sanitizeIsoDate(certExpiryDate);
+    const resolved = findIssuerByNameOrId(cleanIssuer, certIssuerLogoId);
 
     onUpdateProfile({
       ...profile,
@@ -263,7 +380,10 @@ export function ResumeView({
           title: cleanTitle,
           issuer: cleanIssuer,
           year: certYear.trim() || '2026',
+          expiryDate: safeExpiry,
           credentialId: certCredentialId.trim() || undefined,
+          credentialUrl: safeUrl || undefined,
+          issuerLogoId: certIssuerLogoId || resolved?.id || undefined,
         },
         ...profile.certifications,
       ],
@@ -275,8 +395,11 @@ export function ResumeView({
     );
     setCertTitle('');
     setCertIssuer('');
+    setCertIssuerLogoId('');
     setCertYear('2026');
+    setCertExpiryDate('');
     setCertCredentialId('');
+    setCertCredentialUrl('');
   };
 
   const handleCopyMarkdown = async () => {
@@ -414,6 +537,64 @@ export function ResumeView({
             </span>
           ))}
         </div>
+      </section>
+
+      {/* Template Switcher & Saved Resume Versions */}
+      <section className="no-print rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-sm font-bold text-[#0B2545] dark:text-white">
+              ATS Resume Templates &amp; Multiple Versions
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {RESUME_TEMPLATE_META[activeTemplate].description}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {(Object.keys(RESUME_TEMPLATE_META) as ResumeTemplateId[]).map((tplId) => (
+              <button
+                key={tplId}
+                type="button"
+                onClick={() => handleSelectTemplate(tplId)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                  activeTemplate === tplId
+                    ? 'bg-[#0B2545] text-white dark:bg-[#1D4ED8]'
+                    : 'bg-[#F4F7FB] dark:bg-[#05070B] text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-[#1E3A5F]/60'
+                }`}
+              >
+                {RESUME_TEMPLATE_META[tplId].label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveResumeVersion} className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-200 dark:border-white/10">
+          <input
+            type="text"
+            value={versionTitle}
+            onChange={(e) => setVersionTitle(e.target.value)}
+            placeholder="Version name (e.g., Full Stack Google CV)"
+            aria-label="Resume version title"
+            className="flex-1 min-w-[200px] rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-1.5 text-xs text-slate-900 dark:text-white"
+          />
+          <button
+            type="submit"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-[#1D4ED8] whitespace-nowrap"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>Save Version</span>
+          </button>
+          {(profile.resumeVersions || []).map((ver) => (
+            <button
+              key={ver.id}
+              type="button"
+              onClick={() => handleLoadResumeVersion(ver)}
+              className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] text-[#0B2545] dark:text-amber-300"
+            >
+              Load: {ver.title} ({ver.atsScore}%)
+            </button>
+          ))}
+        </form>
       </section>
 
       {/* Split Layout: Left Editor Forms | Right Live Formatted Sheet */}
@@ -852,37 +1033,123 @@ export function ResumeView({
 
             {profile.certifications.length > 0 && (
               <div className="space-y-2.5">
-                {profile.certifications.map((cert) => (
-                  <div
-                    key={cert.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-3.5"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{cert.title}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {cert.issuer} · {cert.year}
-                        {cert.credentialId ? ` · ID: ${cert.credentialId}` : ''}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Remove resume certification ${cert.title}`}
-                      onClick={() =>
-                        onUpdateProfile({
-                          ...profile,
-                          certifications: profile.certifications.filter((c) => c.id !== cert.id),
-                        })
-                      }
-                      className="text-slate-400 hover:text-[#0B2545] dark:hover:text-amber-400 p-1"
+                {profile.certifications.map((cert) => {
+                  const safeUrl = sanitizeExternalUrl(cert.credentialUrl);
+                  return (
+                    <div
+                      key={cert.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-3.5"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <IssuerLogo
+                          issuerName={cert.issuer}
+                          issuerLogoId={cert.issuerLogoId}
+                          size="sm"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                            {cert.title}
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {cert.issuer} · {cert.year}
+                            {cert.expiryDate ? ` · Expires: ${cert.expiryDate}` : ''}
+                            {cert.credentialId ? ` · ID: ${cert.credentialId}` : ''}
+                          </p>
+                          {safeUrl && (
+                            <a
+                              href={safeUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-amber-400 hover:underline truncate max-w-full"
+                            >
+                              <ExternalLink className="w-3 h-3 shrink-0" />
+                              <span>{safeUrl}</span>
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={`Remove resume certification ${cert.title}`}
+                        onClick={() =>
+                          onUpdateProfile({
+                            ...profile,
+                            certifications: profile.certifications.filter((c) => c.id !== cert.id),
+                          })
+                        }
+                        className="text-slate-400 hover:text-[#0B2545] dark:hover:text-amber-400 p-1 shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
-            <form onSubmit={handleAddCertification} className="space-y-2.5 pt-2 border-t border-slate-200 dark:border-[#1E3A5F]/60">
+            <form onSubmit={handleAddCertification} className="space-y-3 pt-2 border-t border-slate-200 dark:border-[#1E3A5F]/60">
+              <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-[#0B2545] dark:text-white">
+                    Select Issuer with Original Logo ({matchingIssuers.length} verified issuers)
+                  </span>
+                </div>
+                <div className="flex gap-1.5">
+                  <input
+                    type="search"
+                    value={issuerSearchInput}
+                    onChange={(e) => {
+                      setIssuerSearchInput(e.target.value);
+                      if (!e.target.value.trim()) setIssuerAppliedQuery('');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        setIssuerAppliedQuery(issuerSearchInput);
+                      }
+                    }}
+                    placeholder="Search issuing organization (Google, AWS, Microsoft, Meta, NVIDIA, Coursera)..."
+                    aria-label="Search resume certification issuer"
+                    className="flex-1 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIssuerAppliedQuery(issuerSearchInput)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8]"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    <span>Search</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-32 overflow-y-auto">
+                  {matchingIssuers.map((iss) => {
+                    const selected = certIssuerLogoId === iss.id || certIssuer === iss.name;
+                    return (
+                      <button
+                        key={iss.id}
+                        type="button"
+                        onClick={() => {
+                          setCertIssuer(iss.name);
+                          setCertIssuerLogoId(iss.id);
+                          if (!certCredentialUrl.trim()) {
+                            setCertCredentialUrl(iss.verifyBaseUrl);
+                          }
+                        }}
+                        className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-left text-xs font-medium transition-colors ${
+                          selected
+                            ? 'border-emerald-600 bg-emerald-50 dark:border-amber-400 dark:bg-[#0F213E] text-[#0B2545] dark:text-white'
+                            : 'border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] text-slate-700 dark:text-slate-200 hover:border-[#0B2545]'
+                        }`}
+                      >
+                        <IssuerLogo issuerName={iss.name} issuerLogoId={iss.id} size="sm" />
+                        <span className="truncate">{iss.shortName}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <input
                   type="text"
@@ -896,21 +1163,32 @@ export function ResumeView({
                 <input
                   type="text"
                   value={certIssuer}
-                  onChange={(e) => setCertIssuer(e.target.value)}
+                  onChange={(e) => {
+                    setCertIssuer(e.target.value);
+                    setCertIssuerLogoId('');
+                  }}
                   placeholder="Issuing organization *"
                   aria-label="Resume certification issuer"
                   required
                   className="rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
               </div>
-              <div className="flex flex-col sm:flex-row gap-2">
+
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                 <input
                   type="text"
                   value={certYear}
                   onChange={(e) => setCertYear(e.target.value)}
                   placeholder="Year"
                   aria-label="Resume certification year"
-                  className="sm:w-28 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm tabular-nums text-slate-900 dark:text-white"
+                  className="sm:col-span-2 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm tabular-nums text-slate-900 dark:text-white"
+                />
+                <input
+                  type="date"
+                  value={certExpiryDate}
+                  onChange={(e) => setCertExpiryDate(e.target.value)}
+                  aria-label="Resume certification expiry date"
+                  className="sm:col-span-3 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
                 <input
                   type="text"
@@ -918,8 +1196,19 @@ export function ResumeView({
                   onChange={(e) => setCertCredentialId(e.target.value)}
                   placeholder="Credential ID (optional)"
                   aria-label="Resume certification credential ID"
-                  className="flex-1 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="sm:col-span-3 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
+                <input
+                  type="url"
+                  value={certCredentialUrl}
+                  onChange={(e) => setCertCredentialUrl(e.target.value)}
+                  placeholder="Credential Website URL (https://...)"
+                  aria-label="Resume certification credential URL"
+                  className="sm:col-span-4 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="flex justify-end">
                 <button
                   type="submit"
                   className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] whitespace-nowrap"
@@ -930,22 +1219,161 @@ export function ResumeView({
               </div>
             </form>
           </section>
+
+          {/* 6. ATS Score, Grammar Optimizer & LinkedIn Profile Tips */}
+          <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
+                6. ATS Optimizer, Grammar &amp; LinkedIn Tips
+              </h2>
+              <span className="font-mono text-sm font-bold tabular-nums text-emerald-700 dark:text-amber-400">
+                ATS Fit: {atsAnalysis.atsScorePct}%
+              </span>
+            </div>
+
+            <textarea
+              rows={2}
+              value={atsTargetJd}
+              onChange={(e) => setAtsTargetJd(e.target.value)}
+              aria-label="Target job description for ATS optimization"
+              placeholder="Paste target job description keywords..."
+              className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-xs text-slate-900 dark:text-white"
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-3 space-y-1">
+                <p className="font-semibold text-emerald-700 dark:text-emerald-400">
+                  Matched Keywords ({atsAnalysis.matchedKeywords.length})
+                </p>
+                <p className="text-slate-600 dark:text-slate-300">
+                  {atsAnalysis.matchedKeywords.join(' · ') || 'Add skills/projects above to boost score'}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-3 space-y-1">
+                <p className="font-semibold text-amber-700 dark:text-amber-400">
+                  Missing Keywords ({atsAnalysis.missingKeywords.length})
+                </p>
+                <p className="text-slate-600 dark:text-slate-300">
+                  {atsAnalysis.missingKeywords.join(' · ') || 'Full JD keyword match!'}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 text-xs">
+              <p className="font-semibold text-[#0B2545] dark:text-white">Grammar &amp; Impact Suggestions</p>
+              {atsAnalysis.grammarSuggestions.map((g) => (
+                <p key={g} className="text-slate-600 dark:text-slate-300">· {g}</p>
+              ))}
+              <p className="font-semibold text-[#0B2545] dark:text-white pt-1">LinkedIn Optimization</p>
+              {atsAnalysis.linkedinTips.map((tip) => (
+                <p key={tip} className="text-slate-600 dark:text-slate-300">· {tip}</p>
+              ))}
+            </div>
+          </section>
+
+          {/* 7. AI Cover Letter Generator */}
+          <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-4">
+            <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
+              7. AI Cover Letter Generator ({(profile.coverLetters || []).length} saved)
+            </h2>
+            <form onSubmit={handleGenerateCoverLetter} className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+              <input
+                type="text"
+                value={clCompany}
+                onChange={(e) => setClCompany(e.target.value)}
+                placeholder="Company Name"
+                aria-label="Cover letter company name"
+                className="sm:col-span-4 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-xs text-slate-900 dark:text-white"
+              />
+              <input
+                type="text"
+                value={clRole}
+                onChange={(e) => setClRole(e.target.value)}
+                placeholder="Target Role"
+                aria-label="Cover letter target role"
+                className="sm:col-span-4 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-xs text-slate-900 dark:text-white"
+              />
+              <select
+                value={clTone}
+                onChange={(e) => setClTone(e.target.value as CoverLetterItem['tone'])}
+                aria-label="Cover letter tone"
+                className="sm:col-span-4 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-xs text-slate-900 dark:text-white"
+              >
+                <option value="Impact-Driven">Impact-Driven</option>
+                <option value="Formal">Formal</option>
+                <option value="Fresher Enthusiasm">Fresher Enthusiasm</option>
+              </select>
+              <div className="sm:col-span-12 flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8]"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Generate Tailored Cover Letter</span>
+                </button>
+                {clDraft && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleSaveCoverLetter}
+                      className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-700 text-white hover:bg-emerald-800"
+                    >
+                      Save Letter
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(clDraft).catch(() => {});
+                        setCopiedCl(true);
+                        setTimeout(() => setCopiedCl(false), 2000);
+                      }}
+                      className="px-3.5 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-[#1E3A5F]/70 text-slate-700 dark:text-slate-200"
+                    >
+                      {copiedCl ? 'Copied!' : 'Copy Text'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </form>
+
+            {clDraft && (
+              <textarea
+                rows={7}
+                value={clDraft}
+                onChange={(e) => setClDraft(e.target.value)}
+                aria-label="Generated cover letter text"
+                className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] p-3 text-xs text-slate-900 dark:text-white leading-relaxed"
+              />
+            )}
+          </section>
         </div>
 
         {/* Right: Live Formatted ATS Resume Paper Sheet */}
         <div className="xl:col-span-6 xl:sticky xl:top-20">
           <div className="no-print mb-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span className="font-semibold uppercase tracking-wider">Live ATS Resume Preview</span>
+            <span className="font-semibold uppercase tracking-wider">Live ATS Resume Preview · {RESUME_TEMPLATE_META[activeTemplate].label}</span>
             <span>Updates in real time</span>
           </div>
 
           <article
             id="voragen-resume-sheet"
             aria-label="Formatted resume preview"
-            className="rounded-xl border border-slate-200 bg-white text-slate-900 shadow-lg p-7 sm:p-9 space-y-6"
+            className={`rounded-xl border bg-white text-slate-900 shadow-lg space-y-6 ${
+              activeTemplate === 'academic-compact' ? 'p-5 sm:p-6' : 'p-7 sm:p-9'
+            } ${
+              activeTemplate === 'modern-technical'
+                ? 'border-emerald-600/40'
+                : 'border-slate-200'
+            }`}
           >
             {/* Resume Header */}
-            <header className="border-b-2 border-[#0B2545] pb-4 space-y-1.5">
+            <header
+              className={`border-b-2 pb-4 space-y-1.5 ${
+                activeTemplate === 'modern-technical'
+                  ? 'border-emerald-700'
+                  : 'border-[#0B2545]'
+              }`}
+            >
               <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#0B2545]">
                 {previewProfile.name.trim() || 'Your Full Name'}
               </h2>
@@ -1086,19 +1514,45 @@ export function ResumeView({
                 Certifications Obtained
               </h3>
               {profile.certifications.length > 0 ? (
-                <ul className="space-y-1.5">
-                  {profile.certifications.map((cert) => (
-                    <li key={cert.id} className="flex items-baseline justify-between gap-2 text-xs">
-                      <span>
-                        <strong className="text-slate-950">{cert.title}</strong> —{' '}
-                        <span className="text-slate-700">{cert.issuer}</span>
-                        {cert.credentialId ? (
-                          <span className="text-slate-500"> · ID: {cert.credentialId}</span>
-                        ) : null}
-                      </span>
-                      <span className="font-mono text-slate-600 shrink-0">{cert.year}</span>
-                    </li>
-                  ))}
+                <ul className="space-y-2">
+                  {profile.certifications.map((cert) => {
+                    const safeUrl = sanitizeExternalUrl(cert.credentialUrl);
+                    return (
+                      <li key={cert.id} className="flex items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <IssuerLogo
+                            issuerName={cert.issuer}
+                            issuerLogoId={cert.issuerLogoId}
+                            size="sm"
+                          />
+                          <div className="min-w-0">
+                            <span>
+                              <strong className="text-slate-950">{cert.title}</strong> —{' '}
+                              <span className="text-slate-700">{cert.issuer}</span>
+                              {cert.expiryDate ? (
+                                <span className="text-slate-500"> · Exp: {cert.expiryDate}</span>
+                              ) : null}
+                              {cert.credentialId ? (
+                                <span className="text-slate-500"> · ID: {cert.credentialId}</span>
+                              ) : null}
+                            </span>
+                            {safeUrl && (
+                              <a
+                                href={safeUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-2 inline-flex items-center gap-1 text-[11px] font-medium text-[#0B2545] underline"
+                              >
+                                <span>Verify Credential</span>
+                                <ExternalLink className="w-2.5 h-2.5 no-print" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        <span className="font-mono text-slate-600 shrink-0">{cert.year}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <p className="text-xs italic text-slate-400">

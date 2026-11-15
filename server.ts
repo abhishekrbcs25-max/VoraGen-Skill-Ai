@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -28,10 +29,17 @@ import {
   type GeminiTextModel,
 } from './src/utils/geminiResilience.ts';
 import {
+  generateOtpCode,
+  hashOtpCode,
   hashPassword,
   isValidEmailFormat,
+  isValidPhoneNumber,
+  maskTargetContact,
+  normalizePhoneNumber,
+  parseDeviceLabel,
   signSessionToken,
   SlidingWindowRateLimiter,
+  verifyOtpCode,
   verifyPassword,
   verifySessionToken,
 } from './src/utils/securityHelpers.ts';
@@ -45,7 +53,21 @@ import {
   recordSqlAssessment,
   updateUserCareerSnapshot,
 } from './src/db/users.ts';
-import type { AIVideoLesson, InterviewEvaluation, MultiAgentReport, UserProfile } from './src/types';
+import {
+  createSeedPlatformStore,
+  loadPlatformStore,
+  savePlatformStore,
+  type PlatformStoreData,
+} from './src/server/platformStore.ts';
+import { registerPlatformRoutes } from './src/server/platformRoutes.ts';
+import type {
+  AIVideoLesson,
+  AccountRole,
+  DeviceSessionInfo,
+  InterviewEvaluation,
+  MultiAgentReport,
+  UserProfile,
+} from './src/types';
 
 function resolveServerPort(): number {
   const portFlagIdx = process.argv.indexOf('--port');
@@ -60,6 +82,26 @@ const PORT = resolveServerPort();
 const DATA_DIR = path.resolve(process.cwd(), '.pathforge-data');
 const PROFILE_FILE = path.join(DATA_DIR, 'profiles.json');
 const CREDENTIALS_FILE = path.join(DATA_DIR, 'credentials.json');
+const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
+
+export interface ServerSessionRecord extends DeviceSessionInfo {
+  revokedAt?: string;
+}
+
+export type OtpPurpose = 'phone-auth' | 'email-verify' | 'password-reset' | '2fa';
+
+export interface OtpChallengeRecord {
+  id: string;
+  target: string;
+  channel: 'email' | 'phone';
+  purpose: OtpPurpose;
+  hash: string;
+  salt: string;
+  expiresAt: number;
+  attempts: number;
+  verifiedForReset?: boolean;
+  userKey?: string;
+}
 
 function ensureDataStore(): Record<string, UserProfile> {
   try {
@@ -110,6 +152,32 @@ function saveCredentialsStore(store: Record<string, string>): void {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(store, null, 2));
+  } catch {
+    // Non-fatal in read-only sandboxes
+  }
+}
+
+function ensureSessionsStore(): Record<string, ServerSessionRecord> {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(SESSIONS_FILE)) {
+      fs.writeFileSync(SESSIONS_FILE, JSON.stringify({}, null, 2));
+      return {};
+    }
+    return JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf-8')) as Record<string, ServerSessionRecord>;
+  } catch {
+    return {};
+  }
+}
+
+function saveSessionsStore(store: Record<string, ServerSessionRecord>): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(store, null, 2));
   } catch {
     // Non-fatal in read-only sandboxes
   }
@@ -178,6 +246,9 @@ async function withTimeout<T>(promise: Promise<T>, ms = 8500): Promise<T> {
 export interface CreateApiAppOptions {
   profileStore?: Record<string, UserProfile>;
   credentialsStore?: Record<string, string>;
+  sessionsStore?: Record<string, ServerSessionRecord>;
+  platformStore?: PlatformStoreData;
+  otpStore?: Record<string, OtpChallengeRecord>;
   persistStores?: boolean;
   verifyIdTokenFn?: (idToken: string) => Promise<{ email?: string; email_verified?: boolean }>;
   requireAuthMiddleware?: express.RequestHandler;
@@ -202,7 +273,7 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
   app.use((_req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'camera=(), geolocation=()');
+    res.setHeader('Permissions-Policy', 'camera=(), geolocation=(self)');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
@@ -238,6 +309,11 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
   const shouldPersist = options.persistStores !== false;
   const profileStore = options.profileStore ?? ensureDataStore();
   const credentialsStore = options.credentialsStore ?? ensureCredentialsStore();
+  const sessionsStore =
+    options.sessionsStore ?? (shouldPersist ? ensureSessionsStore() : {});
+  const platformStore =
+    options.platformStore ?? (shouldPersist ? loadPlatformStore() : createSeedPlatformStore());
+  const otpStore = options.otpStore ?? {};
   const verifyIdTokenFn =
     options.verifyIdTokenFn ?? ((token: string) => adminAuth.verifyIdToken(token));
   const authMiddleware = options.requireAuthMiddleware ?? requireAuth;
@@ -256,13 +332,116 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
   const persistCredentialsStore = () => {
     if (shouldPersist) saveCredentialsStore(credentialsStore);
   };
+  const persistSessionsStore = () => {
+    if (shouldPersist) saveSessionsStore(sessionsStore);
+  };
+  const persistPlatformStore = () => {
+    if (shouldPersist) savePlatformStore(platformStore);
+  };
 
-  function verifyProfileAccess(req: express.Request, key: string): boolean {
-    if (!key || key === 'default') return false;
+  const SELF_REGISTER_ROLES: AccountRole[] = [
+    'student',
+    'working-professional',
+    'job-seeker',
+    'employer',
+  ];
+
+  const shouldExposeSandboxOtp = () =>
+    !process.env.TWILIO_ACCOUNT_SID && !process.env.SMTP_HOST;
+
+  function createDeviceSession(
+    userKey: string,
+    role: AccountRole,
+    req: express.Request,
+  ): { token: string; session: ServerSessionRecord } {
+    const normalizedKey = userKey.toLowerCase();
+    const sessionId = crypto.randomUUID();
+    const { deviceLabel, browser, os } = parseDeviceLabel(
+      typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : '',
+    );
+    const nowIso = new Date().toISOString();
+    const session: ServerSessionRecord = {
+      sessionId,
+      userKey: normalizedKey,
+      deviceLabel,
+      browser,
+      os,
+      ip: req.ip || '127.0.0.1',
+      createdAt: nowIso,
+      lastActiveAt: nowIso,
+    };
+    sessionsStore[sessionId] = session;
+    persistSessionsStore();
+    const token = signSessionToken(
+      normalizedKey,
+      7 * 24 * 60 * 60_000,
+      Date.now(),
+      undefined,
+      { jti: sessionId, role },
+    );
+    return { token, session };
+  }
+
+  function revokeAllUserSessions(userKey: string, exceptSessionId?: string): number {
+    const normalizedKey = userKey.toLowerCase();
+    const nowIso = new Date().toISOString();
+    let revokedCount = 0;
+    for (const sess of Object.values(sessionsStore)) {
+      if (sess.userKey === normalizedKey && !sess.revokedAt && sess.sessionId !== exceptSessionId) {
+        sess.revokedAt = nowIso;
+        revokedCount += 1;
+      }
+    }
+    if (revokedCount > 0) persistSessionsStore();
+    return revokedCount;
+  }
+
+  function createOtpChallenge(params: {
+    target: string;
+    channel: 'email' | 'phone';
+    purpose: OtpPurpose;
+    userKey?: string;
+  }): { challengeId: string; code: string; maskedTarget: string; expiresInSec: number } {
+    const code = generateOtpCode();
+    const salt = crypto.randomBytes(16).toString('hex');
+    const challengeId = crypto.randomUUID();
+    otpStore[challengeId] = {
+      id: challengeId,
+      target: params.target,
+      channel: params.channel,
+      purpose: params.purpose,
+      hash: hashOtpCode(code, salt),
+      salt,
+      expiresAt: Date.now() + 10 * 60_000,
+      attempts: 0,
+      userKey: params.userKey,
+    };
+    return {
+      challengeId,
+      code,
+      maskedTarget: maskTargetContact(params.target, params.channel),
+      expiresInSec: 600,
+    };
+  }
+
+  function verifyProfileAccess(
+    req: express.Request,
+    key: string,
+  ): { valid: boolean; sub?: string; jti?: string; role?: string } {
+    if (!key || key === 'default') return { valid: false };
     const headerToken = typeof req.headers['x-voragen-token'] === 'string'
       ? req.headers['x-voragen-token']
       : '';
-    return verifySessionToken(headerToken, key).valid;
+    const verified = verifySessionToken(headerToken, key);
+    if (!verified.valid) return { valid: false };
+    if (verified.jti) {
+      const sess = sessionsStore[verified.jti];
+      if (!sess || sess.revokedAt || sess.userKey !== key.toLowerCase()) {
+        return { valid: false };
+      }
+      sess.lastActiveAt = new Date().toISOString();
+    }
+    return verified;
   }
 
   // Health check
@@ -280,17 +459,21 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
   // Get active authenticated learner profile (requires valid signed session token)
   app.get('/api/profile', (req, res) => {
     const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
-    if (!verifyProfileAccess(req, key) || !profileStore[key]) {
+    if (!verifyProfileAccess(req, key).valid) {
       res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    if (!profileStore[key]) {
+      res.status(404).json({ error: 'Profile workspace not initialized', profileNotFound: true });
       return;
     }
     res.json(profileStore[key]);
   });
 
-  // Persist learner profile updates (authenticated users only + sanitized + immutable authProvider)
+  // Persist learner profile updates (authenticated users only + sanitized + immutable authProvider & role)
   app.put('/api/profile', (req, res) => {
     const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
-    if (!verifyProfileAccess(req, key)) {
+    if (!verifyProfileAccess(req, key).valid) {
       res.status(401).json({ error: 'Authentication required' });
       return;
     }
@@ -299,30 +482,91 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
       res.status(400).json({ error: 'Invalid profile payload' });
       return;
     }
-    const existingProvider = profileStore[key]?.authProvider;
+    const existing = profileStore[key];
+    const nextPhoneNormalized = normalizePhoneNumber(body.phone || '');
+    const existingPhoneNormalized = normalizePhoneNumber(existing?.phone || '');
+    const phoneChanged =
+      Boolean(existing) && nextPhoneNormalized !== existingPhoneNormalized;
+
+    // Prevent privilege escalation to admin via profile PUT
+    const safeRole: AccountRole =
+      existing?.role ||
+      (body.role && body.role !== 'admin' ? body.role : 'student');
+
     const sanitized = sanitizeUserProfile({
       ...body,
       email: key,
       isSignedIn: true,
-      authProvider: existingProvider || body.authProvider || 'email',
+      authProvider: existing?.authProvider || body.authProvider || 'email',
+      role: safeRole,
+      emailVerified: existing ? Boolean(existing.emailVerified) : Boolean(body.emailVerified),
+      phoneVerified: existing
+        ? phoneChanged
+          ? false
+          : Boolean(existing.phoneVerified)
+        : Boolean(body.phoneVerified),
+      acceptedTermsAt: existing?.acceptedTermsAt || body.acceptedTermsAt,
+      acceptedPrivacyAt: existing?.acceptedPrivacyAt || body.acceptedPrivacyAt,
     });
     profileStore[key] = sanitized;
     persistProfileStore();
     res.json({ ok: true, profile: sanitized });
   });
 
-  // Clear signed-in user workspace back to a clean empty profile
-  app.post('/api/profile/reset', (req, res) => {
+  // Permanently delete authenticated user account, credentials, and sessions
+  app.delete('/api/profile', (req, res) => {
     const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
-    if (!verifyProfileAccess(req, key)) {
+    if (!verifyProfileAccess(req, key).valid) {
       res.status(401).json({ error: 'Authentication required' });
       return;
     }
+    const body = (req.body || {}) as { confirmEmail?: string };
+    if (
+      !body.confirmEmail ||
+      (body.confirmEmail.trim().toLowerCase() !== key &&
+        body.confirmEmail.trim().toUpperCase() !== 'DELETE')
+    ) {
+      res.status(400).json({ error: 'Please enter your account email or DELETE to confirm account deletion.' });
+      return;
+    }
+
+    delete profileStore[key];
+    delete credentialsStore[key];
+    for (const [sid, sess] of Object.entries(sessionsStore)) {
+      if (sess.userKey === key) {
+        delete sessionsStore[sid];
+      }
+    }
+    for (const [cid, ch] of Object.entries(otpStore)) {
+      if (ch.userKey === key || ch.target.toLowerCase() === key) {
+        delete otpStore[cid];
+      }
+    }
+    persistProfileStore();
+    persistCredentialsStore();
+    persistSessionsStore();
+    res.json({ ok: true, deleted: true });
+  });
+
+  // Clear signed-in user workspace back to a clean empty profile
+  app.post('/api/profile/reset', (req, res) => {
+    const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
+    if (!verifyProfileAccess(req, key).valid) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    const existing = profileStore[key];
     const fresh = {
       ...createFreshUserProfile({
-        name: profileStore[key]?.name || 'Learner',
+        name: existing?.name || 'Learner',
         email: key,
-        authProvider: profileStore[key]?.authProvider || 'email',
+        authProvider: existing?.authProvider || 'email',
+        role: existing?.role || 'student',
+        phone: existing?.phone,
+        emailVerified: existing?.emailVerified,
+        phoneVerified: existing?.phoneVerified,
+        acceptedTermsAt: existing?.acceptedTermsAt,
+        acceptedPrivacyAt: existing?.acceptedPrivacyAt,
       }),
       needsOnboarding: false,
     };
@@ -331,15 +575,105 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
     res.json({ ok: true, profile: fresh });
   });
 
-  // Register a brand-new user with salted scrypt password hashing & fresh empty profile
+  // Check whether an admin account exists on this workspace
+  app.get('/api/auth/admin-status', (_req, res) => {
+    const hasAdmin = Object.values(profileStore).some((p) => p.role === 'admin');
+    res.json({ hasAdmin });
+  });
+
+  // One-time bootstrap for initial workspace Admin (locks permanently once an admin exists)
+  app.post('/api/auth/admin-bootstrap', (req, res) => {
+    const hasAdmin = Object.values(profileStore).some((p) => p.role === 'admin');
+    if (hasAdmin) {
+      res.status(403).json({
+        error: 'An administrator account already exists. Please use Admin Login.',
+      });
+      return;
+    }
+    const { name, email, password, acceptedTerms, acceptedPrivacy } = req.body as {
+      name?: string;
+      email?: string;
+      password?: string;
+      acceptedTerms?: boolean;
+      acceptedPrivacy?: boolean;
+    };
+    if (!acceptedTerms || !acceptedPrivacy) {
+      res.status(400).json({ error: 'You must accept Terms & Conditions and Privacy Policy.' });
+      return;
+    }
+    const cleanEmail = sanitizeTextField(email || '', 160).toLowerCase();
+    if (!cleanEmail || !isValidEmailFormat(cleanEmail)) {
+      res.status(400).json({ error: 'A valid admin email address is required.' });
+      return;
+    }
+    if (!password || password.length < 8) {
+      res.status(400).json({ error: 'Admin password must be at least 8 characters.' });
+      return;
+    }
+    if (profileStore[cleanEmail]) {
+      res.status(409).json({ error: 'This email is already registered as a standard user.' });
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    credentialsStore[cleanEmail] = hashPassword(password);
+    persistCredentialsStore();
+    const adminProfile: UserProfile = {
+      ...createFreshUserProfile({
+        name: sanitizeTextField(name || '', 80) || 'Workspace Admin',
+        email: cleanEmail,
+        authProvider: 'email',
+        role: 'admin',
+        emailVerified: true,
+        acceptedTermsAt: nowIso,
+        acceptedPrivacyAt: nowIso,
+      }),
+      needsOnboarding: false,
+    };
+    profileStore[cleanEmail] = adminProfile;
+    persistProfileStore();
+    const { token } = createDeviceSession(cleanEmail, 'admin', req);
+    res.json({ ok: true, key: cleanEmail, token, profile: adminProfile });
+  });
+
+  // Register a brand-new user with salted scrypt password hashing, role selection & legal acceptance
   app.post('/api/auth/register', async (req, res) => {
-    const { name, email, password, authProvider, idToken } = req.body as {
+    const {
+      name,
+      email,
+      password,
+      authProvider,
+      idToken,
+      role,
+      phone,
+      acceptedTerms,
+      acceptedPrivacy,
+    } = req.body as {
       name?: string;
       email?: string;
       password?: string;
       authProvider?: UserProfile['authProvider'];
       idToken?: string;
+      role?: AccountRole;
+      phone?: string;
+      acceptedTerms?: boolean;
+      acceptedPrivacy?: boolean;
     };
+    if (!acceptedTerms || !acceptedPrivacy) {
+      res.status(400).json({
+        error: 'Please accept the Terms & Conditions and Privacy Policy to create an account.',
+      });
+      return;
+    }
+    if (role === 'admin') {
+      res.status(403).json({
+        error: 'Admin accounts cannot be self-registered. Use Admin Portal.',
+      });
+      return;
+    }
+    const resolvedRole: AccountRole =
+      role && SELF_REGISTER_ROLES.includes(role) ? role : 'student';
+
     const cleanEmail = sanitizeTextField(email || '', 160).toLowerCase();
     if (!cleanEmail || !isValidEmailFormat(cleanEmail)) {
       res.status(400).json({ error: 'A valid email address (e.g., name@domain.com) is required.' });
@@ -351,6 +685,7 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
       res.status(400).json({ error: 'Password must be at least 6 characters.' });
       return;
     }
+    let googleEmailVerified = false;
     if (provider === 'google' && idToken) {
       try {
         const decoded = await verifyIdTokenFn(idToken);
@@ -358,6 +693,7 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
           res.status(403).json({ error: 'Google ID token email verification mismatch.' });
           return;
         }
+        googleEmailVerified = true;
       } catch {
         res.status(401).json({ error: 'Invalid Google sign-in token.' });
         return;
@@ -374,25 +710,34 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
       persistCredentialsStore();
     }
 
+    const cleanPhone = phone && isValidPhoneNumber(phone) ? normalizePhoneNumber(phone) : '';
+    const nowIso = new Date().toISOString();
     const freshProfile = createFreshUserProfile({
       name: cleanName,
       email: cleanEmail,
       authProvider: provider,
+      role: resolvedRole,
+      phone: cleanPhone,
+      emailVerified: googleEmailVerified,
+      phoneVerified: false,
+      acceptedTermsAt: nowIso,
+      acceptedPrivacyAt: nowIso,
     });
     profileStore[cleanEmail] = freshProfile;
     persistProfileStore();
-    const token = signSessionToken(cleanEmail);
+    const { token } = createDeviceSession(cleanEmail, resolvedRole, req);
     res.json({ ok: true, key: cleanEmail, token, profile: freshProfile });
   });
 
-  // Log in existing user with strict password or verified OAuth proof (prevents provider spoofing takeover)
+  // Log in existing user with strict password, OAuth proof, Admin portal enforcement, and 2FA challenge
   app.post('/api/auth/login', async (req, res) => {
-    const { email, name, password, authProvider, idToken } = req.body as {
+    const { email, name, password, authProvider, idToken, portalMode } = req.body as {
       email?: string;
       name?: string;
       password?: string;
       authProvider?: UserProfile['authProvider'];
       idToken?: string;
+      portalMode?: 'standard' | 'admin';
     };
     const cleanEmail = sanitizeTextField(email || '', 160).toLowerCase();
     if (!cleanEmail || !isValidEmailFormat(cleanEmail)) {
@@ -406,6 +751,10 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
       const storedHash = credentialsStore[cleanEmail];
       if (!profileStore[cleanEmail]) {
         res.status(404).json({ error: 'No account found for this email. Switch to Create Account to register.' });
+        return;
+      }
+      if (portalMode === 'admin' && profileStore[cleanEmail].role !== 'admin') {
+        res.status(403).json({ error: 'Access denied: this account does not have Administrator privileges.' });
         return;
       }
       if (storedHash && (!password || !verifyPassword(password, storedHash))) {
@@ -427,6 +776,10 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
         persistCredentialsStore();
       }
     } else {
+      if (portalMode === 'admin') {
+        res.status(403).json({ error: 'Admin Login requires verified administrator email and password.' });
+        return;
+      }
       let hasVerifiedGoogleToken = false;
       if (provider === 'google' && idToken) {
         try {
@@ -459,22 +812,423 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
 
     if (profileStore[cleanEmail]) {
       const existing = { ...profileStore[cleanEmail], isSignedIn: true };
+      if (existing.twoFactorEnabled) {
+        const method: 'email' | 'phone' =
+          existing.twoFactorMethod === 'phone' && existing.phone ? 'phone' : 'email';
+        const target = method === 'phone' ? normalizePhoneNumber(existing.phone || '') : cleanEmail;
+        const challenge = createOtpChallenge({
+          target,
+          channel: method,
+          purpose: '2fa',
+          userKey: cleanEmail,
+        });
+        res.json({
+          ok: true,
+          requires2FA: true,
+          challengeId: challenge.challengeId,
+          method,
+          maskedTarget: challenge.maskedTarget,
+          expiresInSec: challenge.expiresInSec,
+          ...(shouldExposeSandboxOtp() ? { devPreviewCode: challenge.code } : {}),
+        });
+        return;
+      }
+
       profileStore[cleanEmail] = existing;
       persistProfileStore();
-      const token = signSessionToken(cleanEmail);
+      const { token } = createDeviceSession(cleanEmail, existing.role || 'student', req);
       res.json({ ok: true, key: cleanEmail, token, isNew: false, profile: existing });
       return;
     }
 
+    const nowIso = new Date().toISOString();
     const freshProfile = createFreshUserProfile({
       name: sanitizeTextField(name || '', 80) || cleanEmail.split('@')[0],
       email: cleanEmail,
       authProvider: provider,
+      role: 'student',
+      emailVerified: provider === 'google',
+      acceptedTermsAt: nowIso,
+      acceptedPrivacyAt: nowIso,
     });
     profileStore[cleanEmail] = freshProfile;
     persistProfileStore();
-    const token = signSessionToken(cleanEmail);
+    const { token } = createDeviceSession(cleanEmail, freshProfile.role || 'student', req);
     res.json({ ok: true, key: cleanEmail, token, isNew: true, profile: freshProfile });
+  });
+
+  // Verify 2FA OTP challenge during login
+  app.post('/api/auth/2fa/verify', (req, res) => {
+    const { challengeId, code } = req.body as { challengeId?: string; code?: string };
+    if (!challengeId || !code) {
+      res.status(400).json({ error: 'Verification challengeId and 6-digit code are required.' });
+      return;
+    }
+    const challenge = otpStore[challengeId];
+    if (!challenge || challenge.purpose !== '2fa') {
+      res.status(404).json({ error: '2FA challenge not found or already used.' });
+      return;
+    }
+    if (Date.now() > challenge.expiresAt) {
+      delete otpStore[challengeId];
+      res.status(410).json({ error: '2FA verification code expired. Please sign in again.' });
+      return;
+    }
+    if (challenge.attempts >= 5) {
+      delete otpStore[challengeId];
+      res.status(429).json({ error: 'Too many invalid 2FA attempts. Please sign in again.' });
+      return;
+    }
+    if (!verifyOtpCode(code, challenge.hash, challenge.salt)) {
+      challenge.attempts += 1;
+      res.status(401).json({ error: 'Invalid 2FA verification code.' });
+      return;
+    }
+
+    const userKey = challenge.userKey;
+    delete otpStore[challengeId];
+    if (!userKey || !profileStore[userKey]) {
+      res.status(404).json({ error: 'Associated account was not found.' });
+      return;
+    }
+    const updated = { ...profileStore[userKey], isSignedIn: true };
+    profileStore[userKey] = updated;
+    persistProfileStore();
+    const { token } = createDeviceSession(userKey, updated.role || 'student', req);
+    res.json({ ok: true, key: userKey, token, profile: updated });
+  });
+
+  // Enable / disable Two-Factor Authentication for authenticated user
+  app.post('/api/auth/2fa/toggle', (req, res) => {
+    const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
+    if (!verifyProfileAccess(req, key).valid) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    const existing = profileStore[key];
+    if (!existing) {
+      res.status(404).json({ error: 'Profile not found' });
+      return;
+    }
+    const { enabled, method } = req.body as { enabled?: boolean; method?: 'email' | 'phone' };
+    const nextMethod: 'email' | 'phone' = method === 'phone' ? 'phone' : 'email';
+    if (enabled && nextMethod === 'phone' && !existing.phone?.trim()) {
+      res.status(400).json({ error: 'Add a phone number to your profile before enabling SMS 2FA.' });
+      return;
+    }
+    const updated: UserProfile = {
+      ...existing,
+      twoFactorEnabled: Boolean(enabled),
+      twoFactorMethod: nextMethod,
+    };
+    profileStore[key] = updated;
+    persistProfileStore();
+    res.json({ ok: true, profile: updated });
+  });
+
+  // Send OTP for Phone Auth, Email Verification, or Password Reset
+  app.post('/api/auth/otp/send', (req, res) => {
+    const { target, channel, purpose } = req.body as {
+      target?: string;
+      channel?: 'phone' | 'email';
+      purpose?: OtpPurpose;
+    };
+    const resolvedPurpose: OtpPurpose =
+      purpose === 'email-verify' || purpose === 'password-reset' ? purpose : 'phone-auth';
+    const resolvedChannel: 'phone' | 'email' =
+      channel === 'email' || resolvedPurpose === 'email-verify' ? 'email' : 'phone';
+
+    if (!target || !target.trim()) {
+      res.status(400).json({ error: 'Contact email or phone number is required.' });
+      return;
+    }
+
+    let normalizedTarget = '';
+    let userKey: string | undefined;
+
+    if (resolvedChannel === 'phone') {
+      if (!isValidPhoneNumber(target)) {
+        res.status(400).json({ error: 'Enter a valid phone number (7–15 digits, e.g., +919876543210).' });
+        return;
+      }
+      normalizedTarget = normalizePhoneNumber(target);
+      if (resolvedPurpose === 'password-reset') {
+        const found = Object.entries(profileStore).find(
+          ([, p]) => normalizePhoneNumber(p.phone || '') === normalizedTarget,
+        );
+        if (!found) {
+          res.status(404).json({ error: 'No account is linked to this phone number.' });
+          return;
+        }
+        userKey = found[0];
+      }
+    } else {
+      normalizedTarget = sanitizeTextField(target, 160).toLowerCase();
+      if (!isValidEmailFormat(normalizedTarget)) {
+        res.status(400).json({ error: 'Please enter a valid email address.' });
+        return;
+      }
+      if (resolvedPurpose === 'password-reset') {
+        if (!profileStore[normalizedTarget]) {
+          res.status(404).json({ error: 'No account found for this email address.' });
+          return;
+        }
+        userKey = normalizedTarget;
+      } else if (resolvedPurpose === 'email-verify') {
+        const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : normalizedTarget;
+        if (!verifyProfileAccess(req, key).valid) {
+          res.status(401).json({ error: 'Sign in first to verify your email address.' });
+          return;
+        }
+        userKey = key;
+      }
+    }
+
+    const challenge = createOtpChallenge({
+      target: normalizedTarget,
+      channel: resolvedChannel,
+      purpose: resolvedPurpose,
+      userKey,
+    });
+    res.json({
+      ok: true,
+      challengeId: challenge.challengeId,
+      maskedTarget: challenge.maskedTarget,
+      expiresInSec: challenge.expiresInSec,
+      ...(shouldExposeSandboxOtp() ? { devPreviewCode: challenge.code } : {}),
+    });
+  });
+
+  // Verify OTP for Phone Auth, Email Verification, or Password Reset step
+  app.post('/api/auth/otp/verify', (req, res) => {
+    const {
+      challengeId,
+      code,
+      name,
+      role,
+      acceptedTerms,
+      acceptedPrivacy,
+    } = req.body as {
+      challengeId?: string;
+      code?: string;
+      name?: string;
+      role?: AccountRole;
+      acceptedTerms?: boolean;
+      acceptedPrivacy?: boolean;
+    };
+
+    if (!challengeId || !code) {
+      res.status(400).json({ error: 'Verification challengeId and 6-digit OTP code are required.' });
+      return;
+    }
+    const challenge = otpStore[challengeId];
+    if (!challenge) {
+      res.status(404).json({ error: 'OTP challenge not found or expired.' });
+      return;
+    }
+    if (Date.now() > challenge.expiresAt) {
+      delete otpStore[challengeId];
+      res.status(410).json({ error: 'OTP expired. Request a fresh code.' });
+      return;
+    }
+    if (challenge.attempts >= 5) {
+      delete otpStore[challengeId];
+      res.status(429).json({ error: 'Maximum OTP attempts exceeded. Request a new code.' });
+      return;
+    }
+    if (!verifyOtpCode(code, challenge.hash, challenge.salt)) {
+      challenge.attempts += 1;
+      res.status(401).json({ error: 'Incorrect OTP code. Please check and retry.' });
+      return;
+    }
+
+    if (challenge.purpose === 'password-reset') {
+      challenge.verifiedForReset = true;
+      res.json({ ok: true, verified: true, challengeId });
+      return;
+    }
+
+    if (challenge.purpose === 'email-verify') {
+      const targetKey = (challenge.userKey || challenge.target).toLowerCase();
+      delete otpStore[challengeId];
+      if (!profileStore[targetKey]) {
+        res.status(404).json({ error: 'Profile not found.' });
+        return;
+      }
+      const updated: UserProfile = {
+        ...profileStore[targetKey],
+        emailVerified: true,
+      };
+      profileStore[targetKey] = updated;
+      persistProfileStore();
+      res.json({ ok: true, profile: updated });
+      return;
+    }
+
+    // phone-auth flow: sign in existing phone account or create new phone-authenticated account
+    const normalizedPhone = normalizePhoneNumber(challenge.target);
+    const digits = normalizedPhone.replace(/\D/g, '');
+    const existingMatch = Object.entries(profileStore).find(
+      ([, p]) => normalizePhoneNumber(p.phone || '') === normalizedPhone,
+    );
+
+    if (existingMatch) {
+      delete otpStore[challengeId];
+      const [foundKey, foundProfile] = existingMatch;
+      const updated: UserProfile = {
+        ...foundProfile,
+        phone: normalizedPhone,
+        phoneVerified: true,
+        isSignedIn: true,
+      };
+      profileStore[foundKey] = updated;
+      persistProfileStore();
+      const { token } = createDeviceSession(foundKey, updated.role || 'student', req);
+      res.json({ ok: true, key: foundKey, token, isNew: false, profile: updated });
+      return;
+    }
+
+    if (role === 'admin') {
+      res.status(403).json({ error: 'Admin accounts cannot be created via phone OTP.' });
+      return;
+    }
+    if (!acceptedTerms || !acceptedPrivacy) {
+      res.status(400).json({
+        error: 'Please accept Terms & Conditions and Privacy Policy to complete registration.',
+        needsRegistrationTerms: true,
+      });
+      return;
+    }
+
+    delete otpStore[challengeId];
+    const resolvedRole: AccountRole =
+      role && SELF_REGISTER_ROLES.includes(role) ? role : 'student';
+    const phoneKey = `phone-${digits}@phone.voragen.local`;
+    const nowIso = new Date().toISOString();
+    const freshProfile = createFreshUserProfile({
+      name: sanitizeTextField(name || '', 80) || `User ${digits.slice(-4)}`,
+      email: phoneKey,
+      authProvider: 'phone',
+      role: resolvedRole,
+      phone: normalizedPhone,
+      emailVerified: false,
+      phoneVerified: true,
+      acceptedTermsAt: nowIso,
+      acceptedPrivacyAt: nowIso,
+    });
+    profileStore[phoneKey] = freshProfile;
+    persistProfileStore();
+    const { token } = createDeviceSession(phoneKey, resolvedRole, req);
+    res.json({ ok: true, key: phoneKey, token, isNew: true, profile: freshProfile });
+  });
+
+  // Complete password reset using verified OTP challenge
+  app.post('/api/auth/reset-password', (req, res) => {
+    const { challengeId, code, newPassword } = req.body as {
+      challengeId?: string;
+      code?: string;
+      newPassword?: string;
+    };
+    if (!challengeId || !newPassword || newPassword.length < 6) {
+      res.status(400).json({ error: 'Challenge ID and a new password (min 6 characters) are required.' });
+      return;
+    }
+    const challenge = otpStore[challengeId];
+    if (!challenge || challenge.purpose !== 'password-reset') {
+      res.status(404).json({ error: 'Password reset challenge not found or expired.' });
+      return;
+    }
+    if (Date.now() > challenge.expiresAt) {
+      delete otpStore[challengeId];
+      res.status(410).json({ error: 'Password reset OTP expired. Request a new code.' });
+      return;
+    }
+    if (!challenge.verifiedForReset) {
+      if (!code || !verifyOtpCode(code, challenge.hash, challenge.salt)) {
+        challenge.attempts += 1;
+        res.status(401).json({ error: 'Invalid OTP code for password reset.' });
+        return;
+      }
+    }
+
+    const userKey = (challenge.userKey || challenge.target).toLowerCase();
+    delete otpStore[challengeId];
+    if (!profileStore[userKey]) {
+      res.status(404).json({ error: 'Account not found.' });
+      return;
+    }
+    credentialsStore[userKey] = hashPassword(newPassword);
+    persistCredentialsStore();
+    // Revoke existing device sessions after password reset for security
+    revokeAllUserSessions(userKey);
+    res.json({ ok: true });
+  });
+
+  // List active sessions across all devices for authenticated user
+  app.get('/api/auth/sessions', (req, res) => {
+    const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
+    const verified = verifyProfileAccess(req, key);
+    if (!verified.valid) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    const sessions = Object.values(sessionsStore)
+      .filter((s) => s.userKey === key && !s.revokedAt)
+      .sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt))
+      .map((s) => ({
+        sessionId: s.sessionId,
+        userKey: s.userKey,
+        deviceLabel: s.deviceLabel,
+        browser: s.browser,
+        os: s.os,
+        ip: s.ip,
+        createdAt: s.createdAt,
+        lastActiveAt: s.lastActiveAt,
+        isCurrent: s.sessionId === verified.jti,
+      }));
+    res.json({ ok: true, sessions });
+  });
+
+  // Revoke a specific device session
+  app.delete('/api/auth/sessions/:sessionId', (req, res) => {
+    const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
+    const verified = verifyProfileAccess(req, key);
+    if (!verified.valid) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    const targetId = req.params.sessionId;
+    const sess = sessionsStore[targetId];
+    if (!sess || sess.userKey !== key) {
+      res.status(404).json({ error: 'Session not found' });
+      return;
+    }
+    sess.revokedAt = new Date().toISOString();
+    persistSessionsStore();
+    res.json({ ok: true, revokedSessionId: targetId, revokedCurrent: targetId === verified.jti });
+  });
+
+  // Sign out all other devices while keeping current session active
+  app.post('/api/auth/sessions/revoke-others', (req, res) => {
+    const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
+    const verified = verifyProfileAccess(req, key);
+    if (!verified.valid) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    const revokedCount = revokeAllUserSessions(key, verified.jti);
+    res.json({ ok: true, revokedCount });
+  });
+
+  // Revoke current session on logout
+  app.post('/api/auth/logout', (req, res) => {
+    const key = typeof req.query.key === 'string' ? req.query.key.trim().toLowerCase() : '';
+    const verified = verifyProfileAccess(req, key);
+    if (verified.valid && verified.jti && sessionsStore[verified.jti]) {
+      sessionsStore[verified.jti].revokedAt = new Date().toISOString();
+      persistSessionsStore();
+    }
+    res.json({ ok: true });
   });
 
   // Cloud SQL Authenticated Learner Snapshot & Progress Endpoints
@@ -1289,10 +2043,18 @@ Give practical, encouraging, technically accurate advice in 3-5 concise sentence
         model: model || 'gemini-4-hydrogen',
         promptSummary: promptSummary || 'Study session',
       });
-      res.json({ ok: true, session: created });
+    res.json({ ok: true, session: created });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
+  });
+
+  registerPlatformRoutes(app, {
+    platformStore,
+    persistPlatformStore,
+    profileStore,
+    sessionsStore,
+    verifyProfileAccess,
   });
 
   return app;

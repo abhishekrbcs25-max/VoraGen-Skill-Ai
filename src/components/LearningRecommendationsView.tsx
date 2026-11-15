@@ -14,6 +14,7 @@ interface LearningRecommendationsViewProps {
   targetRole: CareerRole;
   roadmap: LearningModule[];
   onToggleCompleteModule: (moduleId: string, skillName: string) => void;
+  onOpenCoursesHub?: () => void;
 }
 
 export function LearningRecommendationsView({
@@ -21,6 +22,7 @@ export function LearningRecommendationsView({
   targetRole,
   roadmap,
   onToggleCompleteModule,
+  onOpenCoursesHub,
 }: LearningRecommendationsViewProps) {
   const [filterType, setFilterType] = useState<'All' | LearningModule['type']>('All');
 
@@ -41,23 +43,34 @@ export function LearningRecommendationsView({
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-[#F4F7FB] dark:bg-[#0A1628] border border-slate-200 dark:border-[#1E3A5F]/60">
-          {(['All', 'Remedial Bootcamp', 'Course', 'Tutorial', 'Practical Exercise'] as const).map(
-            (type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setFilterType(type)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-                  filterType === type
-                    ? 'bg-white dark:bg-[#1D4ED8] text-[#0B2545] dark:text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-[#0B2545] dark:hover:text-white'
-                }`}
-              >
-                {type}
-              </button>
-            ),
+        <div className="flex flex-wrap items-center gap-2">
+          {onOpenCoursesHub && (
+            <button
+              type="button"
+              onClick={onOpenCoursesHub}
+              className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors whitespace-nowrap"
+            >
+              Open Full Courses Hub
+            </button>
           )}
+          <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-[#F4F7FB] dark:bg-[#0A1628] border border-slate-200 dark:border-[#1E3A5F]/60">
+            {(['All', 'Remedial Bootcamp', 'Course', 'Tutorial', 'Practical Exercise'] as const).map(
+              (type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFilterType(type)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                    filterType === type
+                      ? 'bg-white dark:bg-[#1D4ED8] text-[#0B2545] dark:text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-[#0B2545] dark:hover:text-white'
+                  }`}
+                >
+                  {type}
+                </button>
+              ),
+            )}
+          </div>
         </div>
       </div>
 

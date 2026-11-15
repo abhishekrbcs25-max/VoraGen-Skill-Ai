@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   Award,
   BarChart3,
+  Calendar,
   CheckCircle2,
   FileSearch,
   Mic,
@@ -13,8 +14,10 @@ import {
 import { extractSkillsFromText } from '../utils/skillEngine';
 import type {
   CareerRole,
+  InterviewAttemptRecord,
   InterviewEvaluation,
   NavSection,
+  ScheduledInterviewItem,
   SkillMatchBreakdown,
   UserProfile,
   UserSkill,
@@ -75,6 +78,29 @@ function inferSkillCategory(name: string): UserSkill['category'] {
   return 'Foundations';
 }
 
+const CATEGORY_PROMPTS: Record<
+  InterviewAttemptRecord['category'],
+  string[]
+> = {
+  Technical: [],
+  HR: [
+    'Tell me about a challenging deadline or conflict in a team project and how you resolved it constructively.',
+    'Why do you want to transition into this domain and what drives your engineering ownership?',
+  ],
+  Company: [
+    'Imagine joining our engineering platform on Day 1: how would you ramp up and deliver your first safe PR in week one?',
+    'Describe a time you simplified a complex product requirement while protecting reliability and security.',
+  ],
+  DSA: [
+    'Explain how to detect a cycle in a linked list in O(1) space or design an LRU cache with O(1) get/put.',
+    'Compare Breadth-First Search vs Dijkstra shortest path algorithms and when each is optimal.',
+  ],
+  'Group Discussion': [
+    'AI code assistants are transforming junior software engineering: summarize both productivity gains and quality/security guardrails for an engineering panel.',
+    'Monolith-first vs Microservices for a 10-engineer startup: build a structured 2-minute opening stance.',
+  ],
+};
+
 export function CareerLabView({
   profile,
   targetRole,
@@ -82,11 +108,27 @@ export function CareerLabView({
   onUpdateProfile,
   onNavigate,
 }: CareerLabViewProps) {
-  const roleQuestions = INTERVIEW_BANKS[targetRole.id] ?? INTERVIEW_BANKS['fullstack-dev'];
+  const [interviewCategory, setInterviewCategory] =
+    useState<InterviewAttemptRecord['category']>('Technical');
+  const [practiceMode, setPracticeMode] =
+    useState<InterviewAttemptRecord['mode']>('text');
+  const roleQuestions =
+    interviewCategory === 'Technical'
+      ? INTERVIEW_BANKS[targetRole.id] ?? INTERVIEW_BANKS['fullstack-dev']
+      : CATEGORY_PROMPTS[interviewCategory];
   const [selectedQuestion, setSelectedQuestion] = useState(roleQuestions[0]);
   const [answerText, setAnswerText] = useState('');
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evalResult, setEvalResult] = useState<InterviewEvaluation | null>(null);
+  const [lastConfidence, setLastConfidence] = useState<{
+    confidencePct: number;
+    communicationPct: number;
+  } | null>(null);
+
+  // Interview reminder scheduler state
+  const [schedCompany, setSchedCompany] = useState('Stripe');
+  const [schedDate, setSchedDate] = useState('2026-12-01 11:00 AM');
+  const [schedMode, setSchedMode] = useState<ScheduledInterviewItem['mode']>('Video');
 
   // ATS Resume / JD Extractor state
   const [atsInput, setAtsInput] = useState(SAMPLE_JD);
@@ -167,18 +209,55 @@ export function CareerLabView({
         body: JSON.stringify({
           question: selectedQuestion,
           answer: answerText,
-          roleTitle: targetRole.title,
+          roleTitle: `${targetRole.title} (${interviewCategory})`,
         }),
       });
       if (res.ok) {
         const data = (await res.json()) as InterviewEvaluation;
         setEvalResult(data);
+        const wordCount = answerText.trim().split(/\s+/).length;
+        const confidencePct = Math.min(98, Math.max(58, data.scorePct + (practiceMode !== 'text' ? 5 : 0)));
+        const communicationPct = Math.min(98, Math.max(60, Math.round(wordCount * 1.4 + 45)));
+        setLastConfidence({ confidencePct, communicationPct });
+        if (profile.isSignedIn) {
+          const attempt: InterviewAttemptRecord = {
+            id: `int-${Date.now()}`,
+            question: selectedQuestion,
+            category: interviewCategory,
+            mode: practiceMode,
+            scorePct: data.scorePct,
+            confidencePct,
+            communicationPct,
+            date: new Date().toISOString().split('T')[0],
+          };
+          onUpdateProfile({
+            ...profile,
+            interviewHistory: [attempt, ...(profile.interviewHistory || [])],
+          });
+        }
       }
     } catch {
       // Handled gracefully
     } finally {
       setIsEvaluating(false);
     }
+  };
+
+  const handleScheduleReminder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!schedCompany.trim() || !schedDate.trim()) return;
+    const item: ScheduledInterviewItem = {
+      id: `sched-${Date.now()}`,
+      companyName: schedCompany.trim(),
+      roleTitle: targetRole.title,
+      scheduledFor: schedDate.trim(),
+      mode: schedMode,
+      reminderSet: true,
+    };
+    onUpdateProfile({
+      ...profile,
+      scheduledInterviews: [item, ...(profile.scheduledInterviews || [])],
+    });
   };
 
   const handleImportDetectedSkills = () => {
@@ -232,7 +311,7 @@ export function CareerLabView({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* AI Mock Technical Interviewer */}
         <section className="lg:col-span-6 rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-4">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Mic className="w-5 h-5 text-[#0B2545] dark:text-sky-300" />
               <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
@@ -242,6 +321,44 @@ export function CareerLabView({
             <span className="text-[11px] font-medium text-emerald-700 dark:text-amber-400">
               {targetRole.title}
             </span>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-1">
+              {(['Technical', 'HR', 'Company', 'DSA', 'Group Discussion'] as const).map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => {
+                    setInterviewCategory(cat);
+                    const nextList =
+                      cat === 'Technical'
+                        ? INTERVIEW_BANKS[targetRole.id] ?? INTERVIEW_BANKS['fullstack-dev']
+                        : CATEGORY_PROMPTS[cat];
+                    setSelectedQuestion(nextList[0]);
+                    setEvalResult(null);
+                  }}
+                  className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
+                    interviewCategory === cat
+                      ? 'bg-[#0B2545] text-white dark:bg-[#1D4ED8]'
+                      : 'bg-[#F4F7FB] dark:bg-[#05070B] text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <select
+              value={practiceMode}
+              onChange={(e) => setPracticeMode(e.target.value as InterviewAttemptRecord['mode'])}
+              aria-label="Mock interview simulation mode"
+              className="rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-2.5 py-1 text-[11px] font-medium text-slate-900 dark:text-white"
+            >
+              <option value="text">Written Mode</option>
+              <option value="voice">Voice Pitch Sim</option>
+              <option value="video-sim">Video Confidence Sim</option>
+            </select>
           </div>
 
           <div className="space-y-2">
@@ -314,14 +431,19 @@ export function CareerLabView({
 
           {evalResult && (
             <div className="rounded-xl border border-emerald-500/35 dark:border-[#1E3A5F] bg-emerald-50/70 dark:bg-[#05070B] p-4 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-slate-900 dark:text-white">
-                  Hiring Committee Rubric Score
+                  Hiring Committee Rubric Score ({interviewCategory})
                 </span>
                 <span className="font-mono text-lg font-bold tabular-nums text-emerald-700 dark:text-amber-400">
                   {evalResult.scorePct}%
                 </span>
               </div>
+              {lastConfidence && (
+                <p className="text-[11px] font-mono text-slate-600 dark:text-slate-300 tabular-nums">
+                  Confidence: {lastConfidence.confidencePct}% · Communication Clarity: {lastConfidence.communicationPct}%
+                </p>
+              )}
               <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed">
                 {evalResult.modelFeedback}
               </p>
@@ -355,6 +477,53 @@ export function CareerLabView({
               </div>
             </div>
           )}
+
+          {/* Interview Reminder Scheduler */}
+          <div className="pt-3 border-t border-slate-200 dark:border-white/10 space-y-2.5">
+            <p className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0B2545] dark:text-white">
+              <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-amber-400" />
+              <span>Upcoming Interview Schedule &amp; Reminders</span>
+            </p>
+            <form onSubmit={handleScheduleReminder} className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+              <input
+                type="text"
+                value={schedCompany}
+                onChange={(e) => setSchedCompany(e.target.value)}
+                placeholder="Company"
+                aria-label="Scheduled interview company"
+                className="sm:col-span-4 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
+              />
+              <input
+                type="text"
+                value={schedDate}
+                onChange={(e) => setSchedDate(e.target.value)}
+                placeholder="Date & Time"
+                aria-label="Scheduled interview date"
+                className="sm:col-span-4 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
+              />
+              <select
+                value={schedMode}
+                onChange={(e) => setSchedMode(e.target.value as ScheduledInterviewItem['mode'])}
+                aria-label="Interview format"
+                className="sm:col-span-2 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-2 py-1.5 text-xs text-slate-900 dark:text-white"
+              >
+                <option value="Video">Video</option>
+                <option value="Phone">Phone</option>
+                <option value="On-Site">On-Site</option>
+              </select>
+              <button
+                type="submit"
+                className="sm:col-span-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-[#1D4ED8]"
+              >
+                Set
+              </button>
+            </form>
+            {(profile.scheduledInterviews || []).slice(0, 3).map((item) => (
+              <p key={item.id} className="text-[11px] text-slate-600 dark:text-slate-300">
+                Reminder Active: <strong>{item.companyName}</strong> ({item.mode}) · {item.scheduledFor}
+              </p>
+            ))}
+          </div>
         </section>
 
         {/* Resume / Job-Description ATS Skill Extractor */}

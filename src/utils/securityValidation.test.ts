@@ -113,10 +113,10 @@ test('sanitizeUserProfile clamps skill levels, strips unsafe URLs, and trims con
   assert.equal(dirty.projects[0].repoUrl, undefined);
 });
 
-test('searchPlatformOptions returns expected targets for resume, Sudoku, Abhishek, and 3D', () => {
+test('searchPlatformOptions returns expected targets for resume, Sudoku, Vora Generation, and 3D', () => {
   assert.equal(searchPlatformOptions('resume')[0]?.targetSection, 'resume');
   assert.equal(searchPlatformOptions('Sudoku')[0]?.subTarget, 'sudoku');
-  assert.equal(searchPlatformOptions('Abhishek')[0]?.targetSection, 'support');
+  assert.equal(searchPlatformOptions('Vora Generation')[0]?.targetSection, 'support');
   assert.equal(searchPlatformOptions('3D')[0]?.subTarget, 'skill-defender-3d');
 });
 
@@ -164,6 +164,8 @@ test('HTTP API enforces password auth, blocks OAuth account takeover, verifies s
         email: 'meera@voragen.test',
         password: 'strongPassword!9',
         authProvider: 'email',
+        acceptedTerms: true,
+        acceptedPrivacy: true,
       }),
     });
     assert.equal(regRes.status, 200);
@@ -179,6 +181,8 @@ test('HTTP API enforces password auth, blocks OAuth account takeover, verifies s
         email: 'meera@voragen.test',
         password: 'strongPassword!9',
         authProvider: 'email',
+        acceptedTerms: true,
+        acceptedPrivacy: true,
       }),
     });
     assert.equal(dupRes.status, 409);
@@ -262,3 +266,36 @@ test('HTTP API enforces password auth, blocks OAuth account takeover, verifies s
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
 });
+
+test('phone validation, OTP hash verification, and avatar/resume sanitization block XSS payloads', async () => {
+  const { isValidPhoneNumber, normalizePhoneNumber, generateOtpCode, hashOtpCode, verifyOtpCode } =
+    await import('./securityHelpers');
+  const { sanitizeAvatarImageUrl, sanitizeResumeFile } = await import('./validation');
+
+  assert.equal(isValidPhoneNumber('+91 98765-43210'), true);
+  assert.equal(isValidPhoneNumber('12345'), false);
+  assert.equal(normalizePhoneNumber(' +91 (987) 654-3210 '), '+919876543210');
+
+  const otp = generateOtpCode();
+  assert.match(otp, /^\d{6}$/);
+  const hash = hashOtpCode(otp, 'salt-123');
+  assert.equal(verifyOtpCode(otp, hash, 'salt-123'), true);
+  assert.equal(verifyOtpCode('000000', hash, 'salt-123'), false);
+
+  assert.equal(sanitizeAvatarImageUrl('data:image/svg+xml;base64,PHN2Zz4='), undefined);
+  assert.equal(sanitizeAvatarImageUrl('javascript:alert(1)'), undefined);
+  assert.equal(sanitizeAvatarImageUrl('data:image/png;base64,iVBORw0KGgo='), 'data:image/png;base64,iVBORw0KGgo=');
+
+  assert.equal(
+    sanitizeResumeFile({ fileName: 'bad.exe', mimeType: 'application/x-msdownload', sizeBytes: 100 }),
+    undefined,
+  );
+  const okResume = sanitizeResumeFile({
+    fileName: 'resume.pdf',
+    mimeType: 'application/pdf',
+    sizeBytes: 1024,
+    uploadedAt: '2026-11-15',
+  });
+  assert.equal(okResume?.fileName, 'resume.pdf');
+});
+

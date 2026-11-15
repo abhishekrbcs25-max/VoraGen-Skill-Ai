@@ -1,0 +1,187 @@
+import type {
+  AchievementBadge,
+  GuidedProjectTemplate,
+  HackathonItem,
+  PlacementDrive,
+  VirtualCareerFair,
+} from '../types';
+
+export const GUIDED_PROJECT_TEMPLATES: GuidedProjectTemplate[] = [
+  {
+    id: 'proj-mini-rate-limiter',
+    title: 'API Rate Limiter & Token Bucket Service',
+    tier: 'Mini Project',
+    difficulty: 'Beginner',
+    domain: 'Backend Engineering',
+    skills: ['JavaScript', 'Node.js'],
+    durationHours: 6,
+    brief: 'Build a deterministic sliding-window request throttler protecting login and payment endpoints.',
+    deliverables: ['Clean limiter module', 'Edge-case unit tests', 'GitHub repo + README benchmarks'],
+    starterCode: `function createLimiter(maxRequests, windowMs) {\n  const hits = new Map();\n  return function allow(userId, now = Date.now()) {\n    const list = (hits.get(userId) || []).filter((t) => now - t < windowMs);\n    if (list.length >= maxRequests) return false;\n    list.push(now);\n    hits.set(userId, list);\n    return true;\n  };\n}\nreturn createLimiter(2, 1000)("u1", 100) && createLimiter(2, 1000)("u1", 200);`,
+    industryPartner: 'Vora Generation Network Labs',
+    certificateTitle: 'Verified Mini Project: API Resilience & Rate Limiting',
+  },
+  {
+    id: 'proj-major-ats-portal',
+    title: 'Multi-Role Career & ATS Recruitment Workspace',
+    tier: 'Major Project',
+    difficulty: 'Intermediate',
+    domain: 'Full Stack Engineering',
+    skills: ['React', 'TypeScript', 'SQL', 'Node.js'],
+    durationHours: 24,
+    brief: 'Architect an end-to-end applicant tracking portal with role permissions, search indexing, and ATS scorecards.',
+    deliverables: ['Responsive React + TS frontend', 'Validated REST API', 'SQL schema & deployment notes'],
+    starterCode: `function scoreMatch(candidateSkills, roleSkills) {\n  const set = new Set(candidateSkills.map((s) => s.toLowerCase()));\n  const hits = roleSkills.filter((s) => set.has(s.toLowerCase())).length;\n  return roleSkills.length ? Math.round((hits / roleSkills.length) * 100) : 100;\n}\nreturn scoreMatch(["React", "SQL", "TypeScript"], ["React", "TypeScript", "SQL", "Node.js"]);`,
+    industryPartner: 'CloudScale Talent Partner',
+    certificateTitle: 'Verified Major Project: Full Stack Career Architecture',
+  },
+  {
+    id: 'proj-industry-rag',
+    title: 'Real-World AI Document Summarizer & Quiz Agent',
+    tier: 'Real-World Industry',
+    difficulty: 'Advanced',
+    domain: 'AI & Machine Learning',
+    skills: ['Python', 'LLM & Agent Systems', 'TypeScript'],
+    durationHours: 36,
+    brief: 'Design a grounded study-material parser that summarizes lecture notes, cites sections, and generates adaptive MCQs.',
+    deliverables: ['Chunked retriever pipeline', 'Deterministic schema validator', 'Demo video + GitHub PR history'],
+    starterCode: `function chunkNotes(text, maxChars) {\n  const words = text.split(/\\s+/);\n  const out = [];\n  let cur = "";\n  for (const w of words) {\n    if ((cur + " " + w).trim().length > maxChars) { out.push(cur.trim()); cur = w; }\n    else { cur = (cur + " " + w).trim(); }\n  }\n  if (cur) out.push(cur);\n  return out.length;\n}\nreturn chunkNotes("VoraGen builds adaptive learning pathways for global engineers.", 28);`,
+    industryPartner: 'FinSage AI Innovation Lab',
+    certificateTitle: 'Industry Capstone: Grounded AI Learning Systems',
+  },
+];
+
+export const HACKATHONS_CATALOG: HackathonItem[] = [
+  {
+    id: 'hack-vora-ai-2026',
+    title: 'VoraGen Global AI & Employability Buildathon',
+    organizer: 'Vora Generation Network',
+    theme: 'Accessible EdTech, Multilingual Tutors & Fair Hiring',
+    prizePool: 'INR 4,50,000 + Fast-Track Interviews',
+    deadline: '2026-12-15',
+    teamSize: '1–4 Members',
+    mode: 'Remote',
+  },
+  {
+    id: 'hack-cloud-sprint',
+    title: 'Zero-Downtime Cloud & Security Sprint',
+    organizer: 'CNCF Student Alliance',
+    theme: 'Container Hardening, Observability & FinOps',
+    prizePool: '$5,000 Cloud Credits + Certificates',
+    deadline: '2026-12-28',
+    teamSize: '2–3 Members',
+    mode: 'Hybrid',
+  },
+  {
+    id: 'hack-fintech-sql',
+    title: 'Data Integrity & Fraud Detection Challenge',
+    organizer: 'Razorpay & Stripe Campus Collective',
+    theme: 'Real-Time Risk Scoring & Anomaly Dashboards',
+    prizePool: 'INR 2,50,000 + Internship Offers',
+    deadline: '2027-01-12',
+    teamSize: '1–3 Members',
+    mode: 'Remote',
+  },
+];
+
+export const ACHIEVEMENT_BADGES_CATALOG: AchievementBadge[] = [
+  {
+    id: 'badge-first-assessment',
+    title: 'Verified Benchmark Achiever',
+    category: 'Skill',
+    criteria: 'Score 60%+ on at least 1 interactive skill diagnostic exam.',
+    xpReward: 100,
+  },
+  {
+    id: 'badge-course-scholar',
+    title: 'Structured Curriculum Scholar',
+    category: 'Course',
+    criteria: 'Complete 3 or more structured lessons or learning modules.',
+    xpReward: 150,
+  },
+  {
+    id: 'badge-project-builder',
+    title: 'Production Builder',
+    category: 'Project',
+    criteria: 'Ship and verify at least 1 practical portfolio project.',
+    xpReward: 200,
+  },
+  {
+    id: 'badge-code-streak',
+    title: 'Consistent Problem Solver',
+    category: 'Milestone',
+    criteria: 'Reach a 5-day streak or 100+ Code Arena points.',
+    xpReward: 175,
+  },
+  {
+    id: 'badge-career-ready',
+    title: 'Career Launch Ready',
+    category: 'Milestone',
+    criteria: 'Reach 60%+ overall readiness & hold 1 verified certificate.',
+    xpReward: 250,
+  },
+];
+
+export const PLACEMENT_DRIVES_CATALOG: PlacementDrive[] = [
+  {
+    id: 'drive-tcs-digital',
+    companyName: 'TCS Digital & Prime Engineering',
+    driveType: 'Campus Placement',
+    roles: ['Systems Engineer', 'Digital Full Stack Developer'],
+    minCgpa: 6.5,
+    eligibleDegrees: ['B.Tech', 'B.E', 'MCA', 'M.Sc CS', 'Undergraduate'],
+    date: '2026-12-08',
+    location: 'National Online + Campus Hubs',
+    packageRange: 'INR 7.5 – 11.5 LPA',
+  },
+  {
+    id: 'drive-zoho-grad',
+    companyName: 'Zoho Corp Product Engineering',
+    driveType: 'Off-Campus',
+    roles: ['Software Developer', 'QA Automation Engineer'],
+    minCgpa: 6.0,
+    eligibleDegrees: ['Any Graduate / B.Tech / B.Sc'],
+    date: '2026-12-18',
+    location: 'Chennai / Remote Screening',
+    packageRange: 'INR 8.4 – 14.0 LPA',
+  },
+  {
+    id: 'drive-infosys-walkin',
+    companyName: 'Infosys Specialist Programmer',
+    driveType: 'Walk-In Interview',
+    roles: ['Specialist Programmer', 'Cloud Operations Analyst'],
+    minCgpa: 6.0,
+    eligibleDegrees: ['B.Tech', 'B.E', 'M.Tech', 'MCA'],
+    date: '2026-12-22',
+    location: 'Bengaluru & Kochi Tech Parks',
+    packageRange: 'INR 9.5 LPA',
+  },
+];
+
+export const VIRTUAL_CAREER_FAIRS_CATALOG: VirtualCareerFair[] = [
+  {
+    id: 'fair-apac-tech-2026',
+    title: 'VoraGen APAC & Global Early-Career Tech Fair',
+    date: '2026-12-10 · 10:00 – 19:00 IST',
+    participatingCompanies: ['Google', 'Zoho', 'Freshworks', 'Razorpay', 'Atlassian'],
+    boothsCount: 38,
+    focusRegion: 'India · Singapore · Remote Global',
+    status: 'Live Today',
+  },
+  {
+    id: 'fair-ai-cloud-2026',
+    title: 'AI Systems, Cloud & Cybersecurity Hiring Summit',
+    date: '2026-12-20 · 14:00 – 21:00 UTC',
+    participatingCompanies: ['Databricks', 'Cloudflare', 'CrowdStrike', 'Microsoft'],
+    boothsCount: 24,
+    focusRegion: 'Remote Worldwide',
+    status: 'Upcoming',
+  },
+];
+
+export const MENTOR_SLOTS_DEFAULT = [
+  'Tomorrow · 17:00 IST (11:30 UTC)',
+  'Friday · 19:30 IST (14:00 UTC)',
+  'Saturday · 11:00 IST (05:30 UTC)',
+  'Monday · 18:00 IST (12:30 UTC)',
+];

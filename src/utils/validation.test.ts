@@ -60,7 +60,15 @@ test('sanitizeUserProfile cleans educationHistory, certifications, careerGoals, 
         title: ' Security+ ',
         issuer: ' CompTIA ',
         year: '2026',
+        expiryDate: ' 2026-12-01 ',
         credentialId: 'SEC-9',
+      },
+      {
+        id: 'bad-exp',
+        title: ' Old Cert ',
+        issuer: ' Cisco ',
+        year: '2025',
+        expiryDate: '2026-02-30',
       },
     ],
     careerGoals: ['  Ship resilient APIs  ', ''],
@@ -72,5 +80,7 @@ test('sanitizeUserProfile cleans educationHistory, certifications, careerGoals, 
   assert.equal(clean.gamesWon, 4);
   assert.equal(clean.educationHistory?.[0].institution, 'MIT');
   assert.equal(clean.certifications[0].title, 'Security+');
+  assert.equal(clean.certifications[0].expiryDate, '2026-12-01');
+  assert.equal(clean.certifications[1].expiryDate, undefined);
   assert.deepEqual(clean.careerGoals, ['Ship resilient APIs']);
 });

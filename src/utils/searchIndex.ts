@@ -1,4 +1,5 @@
 import { CAREER_ROLES, DIAGNOSTIC_QUIZZES, MENTOR_STAFF } from '../data/careerData';
+import { COURSES_CATALOG } from '../data/coursesCatalog';
 import { FLAGSHIP_COMPANIES } from '../data/companiesCatalog';
 import { FLAGSHIP_CODING_CHALLENGES } from '../data/codingCatalog';
 import type { NavSection } from '../types';
@@ -8,12 +9,14 @@ export interface SearchEntry {
   label: string;
   category:
     | 'Navigation'
+    | 'Courses & Learning'
     | 'Skill Assessment'
     | 'Career Role'
     | 'AI Mentor & Video'
     | 'Code Arena'
     | 'Skill Game'
     | 'Global Company'
+    | 'Portals & Governance'
     | 'Settings & Support';
   description: string;
   keywords: string[];
@@ -31,6 +34,86 @@ const STATIC_ENTRIES: SearchEntry[] = [
     targetSection: 'home',
   },
   {
+    id: 'nav-courses',
+    label: 'Online Courses & Interactive Learning Hub',
+    category: 'Courses & Learning',
+    description: 'Browse Free & Paid courses, live classes, PDF notes, offline packs, multilingual switcher, and lesson quizzes',
+    keywords: ['courses', 'lessons', 'video', 'ebook', 'pdf', 'offline', 'multilingual', 'tamil', 'hindi', 'malayalam', 'live'],
+    targetSection: 'courses',
+  },
+  {
+    id: 'nav-projects',
+    label: 'Projects, Team Labs & Hackathons',
+    category: 'Navigation',
+    description: 'Guided mini/major/industry projects, GitHub repo submissions, AI & instructor reviews, and hackathons',
+    keywords: ['projects', 'hackathon', 'github', 'portfolio', 'team', 'submission', 'review', 'capstone'],
+    targetSection: 'projects',
+  },
+  {
+    id: 'nav-certifications',
+    label: 'Certifications, Badges & Digital Skill Passport',
+    category: 'Navigation',
+    description: 'Printable PDF certificates, QR code verification, badge milestones, and public skill passport',
+    keywords: ['certificates', 'qr', 'verify', 'badges', 'passport', 'linkedin', 'achievements', 'pdf'],
+    targetSection: 'certifications',
+  },
+  {
+    id: 'nav-applications',
+    label: 'My Applications, Internships, Drives & Career Fairs',
+    category: 'Navigation',
+    description: 'Track application status, saved jobs, campus placement drives, and virtual career fairs',
+    keywords: ['applications', 'saved', 'shortlisted', 'internship', 'campus', 'placement', 'fair', 'offer'],
+    targetSection: 'applications',
+  },
+  {
+    id: 'nav-community',
+    label: 'Community Forum, Mentors & Gamification Leaderboard',
+    category: 'Navigation',
+    description: 'Q&A discussions, study groups, project showcase, 1:1 mentor booking, XP leaderboard, and referrals',
+    keywords: ['community', 'forum', 'mentors', 'booking', 'leaderboard', 'xp', 'referral', 'webinar', 'study group'],
+    targetSection: 'community',
+  },
+  {
+    id: 'nav-inbox',
+    label: 'Notification Center & Messages Inbox',
+    category: 'Navigation',
+    description: 'Recruiter & instructor messages, platform announcements, and notification channel preferences',
+    keywords: ['notifications', 'inbox', 'messages', 'recruiter', 'announcements', 'email', 'sms', 'push'],
+    targetSection: 'notifications-center',
+  },
+  {
+    id: 'nav-employer-portal',
+    label: 'Employer & Recruiter Dashboard',
+    category: 'Portals & Governance',
+    description: 'Post jobs & internships, AI rank candidates, schedule interviews, and issue offer letters',
+    keywords: ['employer', 'recruiter', 'post job', 'candidates', 'shortlist', 'offer letter', 'analytics'],
+    targetSection: 'employer-portal',
+  },
+  {
+    id: 'nav-admin-portal',
+    label: 'Admin Dashboard & Platform Moderation',
+    category: 'Portals & Governance',
+    description: 'Manage users & roles, publish courses, approve jobs, resolve scam reports, and broadcast notices',
+    keywords: ['admin', 'moderation', 'users', 'scam', 'revenue', 'analytics', 'broadcast'],
+    targetSection: 'admin-portal',
+  },
+  {
+    id: 'nav-pricing',
+    label: 'Pricing, Subscriptions & GST Invoices',
+    category: 'Portals & Governance',
+    description: 'Free & Pro plans, UPI/Card checkout, promo coupons, downloadable GST invoices, and refunds',
+    keywords: ['pricing', 'billing', 'subscription', 'pro', 'invoice', 'gst', 'coupon', 'refund', 'upi'],
+    targetSection: 'pricing',
+  },
+  {
+    id: 'nav-help-center',
+    label: 'About, Privacy, FAQ & Security Audit Log',
+    category: 'Settings & Support',
+    description: 'About Vora Generation Network, FAQ, privacy policy, cookie settings, and login audit trail',
+    keywords: ['about', 'faq', 'privacy', 'terms', 'cookies', 'audit', 'security', 'login history', 'contact'],
+    targetSection: 'help-center',
+  },
+  {
     id: 'nav-profile',
     label: 'User Profile & Sign In / Register',
     category: 'Navigation',
@@ -40,18 +123,18 @@ const STATIC_ENTRIES: SearchEntry[] = [
   },
   {
     id: 'nav-resume',
-    label: 'Resume Builder & CV Studio',
+    label: 'Resume Builder, ATS Optimizer & Cover Letters',
     category: 'Navigation',
-    description: 'Create and export your resume with educational background, skills gained, projects, and certifications',
-    keywords: ['resume', 'cv', 'education', 'degree', 'skills', 'projects', 'certifications', 'pdf', 'print', 'export'],
+    description: 'Create resumes across multiple templates & versions, score ATS keywords, and draft cover letters',
+    keywords: ['resume', 'cv', 'template', 'cover letter', 'ats', 'education', 'skills', 'projects', 'pdf', 'print', 'export'],
     targetSection: 'resume',
   },
   {
     id: 'nav-skill-analysis',
-    label: 'Skill Analysis & Multi-Agent Diagnostics',
+    label: 'Skill Analysis, Aptitude & Timed Exams',
     category: 'Navigation',
-    description: 'Strengths, weaknesses, diagnostic quizzes, and 4-agent AI collaboration',
-    keywords: ['skill', 'analysis', 'assessment', 'quiz', 'weakness', 'strength', 'agents', 'remedial'],
+    description: '20-question technical exams, logical/quantitative/communication aptitude, timed mode, and 4 AI agents',
+    keywords: ['skill', 'analysis', 'aptitude', 'logical', 'quantitative', 'communication', 'timed', 'quiz', 'weakness', 'remedial'],
     targetSection: 'skill-analysis',
   },
   {
@@ -80,18 +163,18 @@ const STATIC_ENTRIES: SearchEntry[] = [
   },
   {
     id: 'nav-ai-mentor',
-    label: 'AI Mentor & Video Lesson Studio',
+    label: 'AI Mentor, Study Toolkit & Video Studio',
     category: 'Navigation',
-    description: 'Chat with AI Staff Teachers and generate interactive AI concept videos',
-    keywords: ['ai', 'mentor', 'teacher', 'staff', 'video', 'studio', 'lesson', 'chat'],
+    description: 'Chat with AI Staff Teachers, debug code, summarize notes, generate revision sheets & concept videos',
+    keywords: ['ai', 'mentor', 'teacher', 'study', 'debugger', 'summarize', 'revision', 'video', 'chat'],
     targetSection: 'ai-mentor',
   },
   {
     id: 'nav-career-lab',
-    label: 'Career Lab (Mock Interviewer & ATS Scanner)',
+    label: 'Career Lab (Mock Interviewer, HR, GD & ATS)',
     category: 'Navigation',
-    description: 'AI technical interview simulator, resume/JD ATS extractor, and cohort benchmarks',
-    keywords: ['career lab', 'interview', 'mock', 'ats', 'resume', 'scanner', 'benchmark', 'cohort'],
+    description: 'AI technical/HR interview simulator, video/voice confidence rubric, GD prep, and cohort benchmarks',
+    keywords: ['career lab', 'interview', 'mock', 'hr', 'gd', 'ats', 'confidence', 'voice', 'video'],
     targetSection: 'career-lab',
   },
   {
@@ -121,10 +204,10 @@ const STATIC_ENTRIES: SearchEntry[] = [
   },
   {
     id: 'nav-jobs',
-    label: 'Global Jobs & 20,000+ Companies',
+    label: 'Global Jobs, Scam Detector & Market Intel',
     category: 'Navigation',
-    description: 'Find skill-matched job vacancies, company logos, contact info, and apply links',
-    keywords: ['jobs', 'companies', 'apply', 'vacancy', 'hiring', 'careers', 'salary'],
+    description: 'Find internships/fresher/remote jobs, detect fake listings, and explore global hiring hubs',
+    keywords: ['jobs', 'companies', 'internship', 'fresher', 'scam', 'market', 'apply', 'salary'],
     targetSection: 'global-jobs',
   },
   {
@@ -137,10 +220,10 @@ const STATIC_ENTRIES: SearchEntry[] = [
   },
   {
     id: 'nav-support',
-    label: 'Help & Support (Abhishek R)',
+    label: 'Help & Support (Vora Generation Network)',
     category: 'Settings & Support',
-    description: 'Contact Abhishek R · abhishekr.bcs25@gmail.com · 9745169331',
-    keywords: ['help', 'support', 'contact', 'abhishek', 'email', 'phone', '9745169331'],
+    description: 'Contact Vora Generation Network · voragenerationnetwork@gmail.com',
+    keywords: ['help', 'support', 'contact', 'vora', 'voragenerationnetwork', 'email'],
     targetSection: 'support',
   },
   // Specific Games
@@ -304,6 +387,18 @@ export function buildSearchCatalog(): SearchEntry[] {
       keywords: [co.companyName, co.roleTitle, co.industry, co.country, ...co.requiredSkills],
       targetSection: 'global-jobs',
       subTarget: co.id,
+    });
+  }
+
+  for (const course of COURSES_CATALOG) {
+    entries.push({
+      id: `course-${course.id}`,
+      label: course.title,
+      category: 'Courses & Learning',
+      description: `${course.level} · ${course.pricing} · ${course.technology}`,
+      keywords: [course.title, course.category, course.technology, course.level, course.pricing],
+      targetSection: 'courses',
+      subTarget: course.id,
     });
   }
 

@@ -7,6 +7,7 @@ import { FLAGSHIP_COMPANIES } from '../data/companiesCatalog';
 import { calculateSkillMatch } from '../utils/skillEngine';
 import { buildInitialNotifications } from '../utils/notifications';
 import { Logo } from './Logo';
+import { IssuerLogo } from './IssuerLogo';
 import { Sidebar } from './Sidebar';
 import { TopSearchBar } from './TopSearchBar';
 import { DailyProductivityHeatmap } from './DailyProductivityHeatmap';
@@ -26,6 +27,16 @@ import { CodeArenaView } from './CodeArenaView';
 import { GamesView } from './GamesView';
 import { CareerLabView } from './CareerLabView';
 import { OnboardingWizardModal } from './OnboardingWizardModal';
+import { CoursesHubView } from './CoursesHubView';
+import { ProjectsView } from './ProjectsView';
+import { CertificationsPassportView } from './CertificationsPassportView';
+import { ApplicationsDrivesView } from './ApplicationsDrivesView';
+import { CommunityMentorsView } from './CommunityMentorsView';
+import { NotificationsCenterView } from './NotificationsCenterView';
+import { EmployerPortalView } from './EmployerPortalView';
+import { AdminPortalView } from './AdminPortalView';
+import { PricingBillingView } from './PricingBillingView';
+import { AboutHelpCenterView } from './AboutHelpCenterView';
 import { generateAdaptiveRoadmap } from '../utils/skillEngine';
 import { LEARNING_CATALOG } from '../data/careerData';
 
@@ -53,7 +64,9 @@ test('Sidebar and TopSearchBar render accessible guest state and Voragen navigat
   assert.match(sidebarHtml, /Guest Visitor/);
   assert.match(sidebarHtml, /aria-current="page"/);
   assert.match(sidebarHtml, /aria-pressed="true"/);
-  assert.match(sidebarHtml, /Abhishek R/);
+  assert.match(sidebarHtml, /Vora Generation Network/);
+  assert.match(sidebarHtml, /voragenerationnetwork@gmail\.com/);
+  assert.equal(sidebarHtml.includes('9745169331'), false);
 
   const topbarHtml = renderToStaticMarkup(
     React.createElement(TopSearchBar, {
@@ -105,6 +118,8 @@ test('ResumeView renders all 5 sections, auth gate notice when signed out, and s
   assert.match(signedOutHtml, /Sign in required to save or update your resume/);
   assert.match(signedOutHtml, /0% Ready/);
   assert.match(signedOutHtml, /Live ATS Resume Preview/);
+  assert.match(signedOutHtml, /ATS Resume Templates/);
+  assert.match(signedOutHtml, /AI Cover Letter Generator/);
 
   const signedInProfile = {
     ...blank,
@@ -137,6 +152,8 @@ test('ResumeView renders all 5 sections, auth gate notice when signed out, and s
         id: 'c1',
         title: 'Cloud Architect',
         issuer: 'Google Cloud',
+        issuerLogoId: 'google-cloud',
+        credentialUrl: 'https://cloud.google.com/certification/verify/123',
         year: '2026',
       },
     ],
@@ -156,6 +173,13 @@ test('ResumeView renders all 5 sections, auth gate notice when signed out, and s
   assert.match(signedInHtml, /NIT Calicut/);
   assert.match(signedInHtml, /SafeURL App/);
   assert.match(signedInHtml, /Cloud Architect/);
+  assert.match(signedInHtml, /Verify Credential/);
+  assert.match(signedInHtml, /https:\/\/cloud\.google\.com\/certification\/verify\/123/);
+
+  const issuerLogoHtml = renderToStaticMarkup(
+    React.createElement(IssuerLogo, { issuerName: 'AWS', issuerLogoId: 'aws' }),
+  );
+  assert.match(issuerLogoHtml, /<svg/);
 });
 
 test('AuthModal, SupportModal, Logo, GlobalJobsView, and ErrorBoundary render accessible markup', () => {
@@ -182,7 +206,10 @@ test('AuthModal, SupportModal, Logo, GlobalJobsView, and ErrorBoundary render ac
   );
   assert.match(authOpen, /role="dialog"/);
   assert.match(authOpen, /Sign in to save your Resume update/);
-  assert.match(authOpen, /Sign in with Google/);
+  assert.match(authOpen, /Google Sign In/);
+  assert.match(authOpen, /Phone OTP/);
+  assert.match(authOpen, /Admin/);
+  assert.match(authOpen, /Forgot password\?/);
 
   const supportOpen = renderToStaticMarkup(
     React.createElement(SupportModal, {
@@ -190,8 +217,9 @@ test('AuthModal, SupportModal, Logo, GlobalJobsView, and ErrorBoundary render ac
       onClose: () => {},
     }),
   );
-  assert.match(supportOpen, /abhishekr\.bcs25@gmail\.com/);
-  assert.match(supportOpen, /9745169331/);
+  assert.match(supportOpen, /Vora Generation Network/);
+  assert.match(supportOpen, /voragenerationnetwork@gmail\.com/);
+  assert.equal(supportOpen.includes('9745169331'), false);
 
   const blank = createBlankUnauthenticatedProfile();
   const match = calculateSkillMatch(blank.skills, CAREER_ROLES[0]);
@@ -201,12 +229,23 @@ test('AuthModal, SupportModal, Logo, GlobalJobsView, and ErrorBoundary render ac
     React.createElement(GlobalJobsView, {
       profile: blank,
       readinessPct: 0,
+      userLocation: {
+        city: 'Tokyo',
+        country: 'Japan',
+        lat: 35.6762,
+        lng: 139.6503,
+        mode: 'manual',
+      },
       onApplyForJob: () => {},
       initialCompanyId: FLAGSHIP_COMPANIES[0].id,
     }),
   );
   assert.match(jobsHtml, /Global Employer Hubs/);
+  assert.match(jobsHtml, /Auto-Detect My Location/);
+  assert.match(jobsHtml, /You \(Tokyo\)/);
+  assert.match(jobsHtml, /km away/);
   assert.match(jobsHtml, /Google/);
+  assert.match(jobsHtml, /Job Scam Detector/);
 
   // Verify ErrorBoundary fallback transition & crash containment
   const errState = ErrorBoundary.getDerivedStateFromError(new Error('Widget crashed safely'));
@@ -295,6 +334,24 @@ test('SkillAnalysisView, ProgressTrackingView, LearningRecommendationsView, and 
   assert.match(skillHtml, /Skill Analysis, Authenticity Check &amp; Multi-Agent Diagnostics/);
   assert.match(skillHtml, /Multi-agent evaluation ready/);
   assert.match(skillHtml, /Remedial SQL active/);
+  assert.match(skillHtml, /Aptitude &amp; Career Exams/);
+
+  const aptitudeHtml = renderToStaticMarkup(
+    React.createElement(SkillAnalysisView, {
+      profile: activeProfile,
+      targetRole,
+      match,
+      agentReport: null,
+      isSyncingAI: false,
+      onRunMultiAgentSync: () => {},
+      onSubmitAssessment: () => {},
+      onVerifySkillAuthenticity: () => {},
+      initialMode: 'aptitude',
+    }),
+  );
+  assert.match(aptitudeHtml, /Technical Aptitude/);
+  assert.match(aptitudeHtml, /Logical Reasoning/);
+  assert.match(aptitudeHtml, /Quantitative Aptitude/);
 
   const progressHtml = renderToStaticMarkup(
     React.createElement(ProgressTrackingView, {
@@ -312,11 +369,12 @@ test('SkillAnalysisView, ProgressTrackingView, LearningRecommendationsView, and 
       targetRole,
       roadmap,
       onToggleCompleteModule: () => {},
+      onOpenCoursesHub: () => {},
     }),
   );
   assert.match(learningHtml, /Personalized Learning Recommendations/);
   assert.match(learningHtml, /Adaptive Remedial Sequence Active/);
-  assert.match(learningHtml, /SQL/);
+  assert.match(learningHtml, /Open Full Courses Hub/);
 
   const settingsHtml = renderToStaticMarkup(
     React.createElement(SettingsView, {
@@ -359,8 +417,44 @@ test('ProfileAuthView, CareerMatchingView, AIMentorView, CodeArenaView, GamesVie
       onOpenAuthModal: () => {},
     }),
   );
-  assert.match(profileHtml, /Learner Profile &amp; Account/);
-  assert.match(profileHtml, /Save Profile Details \(Requires Sign In\)/);
+  assert.match(profileHtml, /Career Profile &amp; Account Security/);
+  assert.match(profileHtml, /Profile Completion Indicator/);
+  assert.match(profileHtml, /Save Details \(Requires Sign In\)/);
+  assert.match(profileHtml, /Account Security, 2FA &amp; Multi-Device Sessions/);
+  assert.match(profileHtml, /id="cert-expiry-date"/);
+  assert.match(profileHtml, /name="expiryDate"/);
+
+  const d10 = new Date();
+  d10.setDate(d10.getDate() + 10);
+  const soonDate = `${d10.getFullYear()}-${String(d10.getMonth() + 1).padStart(2, '0')}-${String(d10.getDate()).padStart(2, '0')}`;
+  const expiringProfileHtml = renderToStaticMarkup(
+    React.createElement(ProfileAuthView, {
+      profile: {
+        ...blank,
+        isSignedIn: true,
+        name: 'Ananya',
+        certifications: [
+          {
+            id: 'exp-1',
+            title: 'AWS Developer Associate',
+            issuer: 'AWS',
+            year: '2025',
+            expiryDate: soonDate,
+          },
+        ],
+      },
+      roles: CAREER_ROLES,
+      match,
+      onUpdateProfile: () => {},
+      onSignOut: () => {},
+      onResetDemo: () => {},
+      onVerifySkill: () => {},
+      onOpenAuthModal: () => {},
+    }),
+  );
+  assert.match(expiringProfileHtml, /Certificate Expiration Alert \(Within 30 Days\)/);
+  assert.match(expiringProfileHtml, /AWS Developer Associate/);
+  assert.match(expiringProfileHtml, /Expires in 10 days/);
 
   const careerHtml = renderToStaticMarkup(
     React.createElement(CareerMatchingView, {
@@ -373,6 +467,26 @@ test('ProfileAuthView, CareerMatchingView, AIMentorView, CodeArenaView, GamesVie
     }),
   );
   assert.match(careerHtml, /Career Matching &amp; What-If Pivot Simulator/);
+  assert.match(careerHtml, /id="career-goal-search"/);
+  assert.match(careerHtml, />Search<\/span>/);
+  assert.match(careerHtml, /206 total catalog/);
+
+  const skillAssessmentHtml = renderToStaticMarkup(
+    React.createElement(SkillAnalysisView, {
+      profile: blank,
+      targetRole,
+      match,
+      agentReport: null,
+      isSyncingAI: false,
+      onRunMultiAgentSync: () => {},
+      onSubmitAssessment: () => {},
+      onVerifySkillAuthenticity: () => {},
+      initialSkill: 'JavaScript',
+      initialMode: 'diagnostic',
+    }),
+  );
+  assert.match(skillAssessmentHtml, /20 Questions/);
+  assert.match(skillAssessmentHtml, /Run Sandbox Tests/);
 
   const mentorHtml = renderToStaticMarkup(
     React.createElement(AIMentorView, {
@@ -384,6 +498,18 @@ test('ProfileAuthView, CareerMatchingView, AIMentorView, CodeArenaView, GamesVie
     }),
   );
   assert.match(mentorHtml, /Dr\. Elena Vance/);
+
+  const studyToolHtml = renderToStaticMarkup(
+    React.createElement(AIMentorView, {
+      profile: blank,
+      targetRole,
+      match,
+      defaultVideoVoice: false,
+      initialSubTab: 'study-tools',
+    }),
+  );
+  assert.match(studyToolHtml, /AI Study Assistant/);
+  assert.match(studyToolHtml, /Explain Simply/);
 
   const arenaHtml = renderToStaticMarkup(
     React.createElement(CodeArenaView, {
@@ -403,6 +529,27 @@ test('ProfileAuthView, CareerMatchingView, AIMentorView, CodeArenaView, GamesVie
   );
   assert.match(gamesHtml, /VoraGen Games/i);
   assert.match(gamesHtml, /2 Games Completed/);
+  assert.match(gamesHtml, /9×9 Logic Sudoku/);
+
+  const zipHtml = renderToStaticMarkup(
+    React.createElement(GamesView, {
+      gamesWon: 0,
+      onWinGame: () => {},
+      onLaunch3DGame: () => {},
+      initialGame: 'zip',
+    }),
+  );
+  assert.match(zipHtml, /Level 1 · 6×6 Full-Grid Circuit/);
+
+  const wordFindHtml = renderToStaticMarkup(
+    React.createElement(GamesView, {
+      gamesWon: 0,
+      onWinGame: () => {},
+      onLaunch3DGame: () => {},
+      initialGame: 'word-find',
+    }),
+  );
+  assert.match(wordFindHtml, /12×12 Systems &amp; Cloud Matrix/);
 
   const labHtml = renderToStaticMarkup(
     React.createElement(CareerLabView, {
@@ -414,6 +561,7 @@ test('ProfileAuthView, CareerMatchingView, AIMentorView, CodeArenaView, GamesVie
     }),
   );
   assert.match(labHtml, /Interview/);
+  assert.match(labHtml, /Voice Pitch Sim/);
 
   const onboardingHtml = renderToStaticMarkup(
     React.createElement(OnboardingWizardModal, {
@@ -427,4 +575,104 @@ test('ProfileAuthView, CareerMatchingView, AIMentorView, CodeArenaView, GamesVie
   assert.match(onboardingHtml, /role="dialog"/);
   assert.match(onboardingHtml, /New Learner/);
 });
+
+test('All 10 new platform views (Courses, Projects, Certifications, Drives, Community, Inbox, Employer, Admin, Pricing, Help) render cleanly', () => {
+  const blank = createBlankUnauthenticatedProfile();
+  const targetRole = CAREER_ROLES[0];
+  const notifs = buildInitialNotifications('Guest Visitor', targetRole.title);
+
+  const coursesHtml = renderToStaticMarkup(
+    React.createElement(CoursesHubView, {
+      profile: blank,
+      targetRole,
+      dailyStudyMinutes: 45,
+      onUpdateProfile: () => {},
+      onRequireAuth: () => true,
+    }),
+  );
+  assert.match(coursesHtml, /Online Courses &amp; Interactive Learning Hub/);
+
+  const projectsHtml = renderToStaticMarkup(
+    React.createElement(ProjectsView, {
+      profile: blank,
+      onUpdateProfile: () => {},
+      onRequireAuth: () => true,
+    }),
+  );
+  assert.match(projectsHtml, /Practical Projects, Team Labs &amp; Hackathons/);
+
+  const certsHtml = renderToStaticMarkup(
+    React.createElement(CertificationsPassportView, {
+      profile: blank,
+      readinessPct: 0,
+      onUpdateProfile: () => {},
+      onRequireAuth: () => true,
+    }),
+  );
+  assert.match(certsHtml, /Certifications, Badges &amp; Digital Skill Passport/);
+
+  const drivesHtml = renderToStaticMarkup(
+    React.createElement(ApplicationsDrivesView, {
+      profile: blank,
+      onUpdateProfile: () => {},
+      onRequireAuth: () => true,
+      onNavigateJobs: () => {},
+    }),
+  );
+  assert.match(drivesHtml, /My Applications, Placement Drives &amp; Virtual Career Fairs/);
+
+  const communityHtml = renderToStaticMarkup(
+    React.createElement(CommunityMentorsView, {
+      profile: blank,
+      onRequireAuth: () => true,
+    }),
+  );
+  assert.match(communityHtml, /Community Forum, 1:1 Mentors &amp; Leaderboard/);
+
+  const notifHtml = renderToStaticMarkup(
+    React.createElement(NotificationsCenterView, {
+      profile: blank,
+      notifications: notifs,
+      onMarkAllRead: () => {},
+      onUpdateProfile: () => {},
+      onRequireAuth: () => true,
+    }),
+  );
+  assert.match(notifHtml, /Notification Center, Announcements &amp; Messaging Inbox/);
+
+  const employerHtml = renderToStaticMarkup(
+    React.createElement(EmployerPortalView, {
+      profile: blank,
+      onRequireAuth: () => true,
+    }),
+  );
+  assert.match(employerHtml, /Employer &amp; Recruiter Hiring Portal/);
+
+  const adminHtml = renderToStaticMarkup(
+    React.createElement(AdminPortalView, {
+      onRequireAuth: () => true,
+    }),
+  );
+  assert.match(adminHtml, /Admin Dashboard &amp; Platform Governance/);
+
+  const pricingHtml = renderToStaticMarkup(
+    React.createElement(PricingBillingView, {
+      profile: blank,
+      onUpdateProfile: () => {},
+      onRequireAuth: () => true,
+    }),
+  );
+  assert.match(pricingHtml, /Subscription Plans, Checkout &amp; GST Invoices/);
+
+  const helpHtml = renderToStaticMarkup(
+    React.createElement(AboutHelpCenterView, {
+      profile: blank,
+      onUpdateProfile: () => {},
+    }),
+  );
+  assert.match(helpHtml, /About Us, FAQ, Privacy &amp; Security Center/);
+  assert.match(helpHtml, /voragenerationnetwork@gmail\.com/);
+  assert.equal(helpHtml.includes('9745169331'), false);
+});
+
 

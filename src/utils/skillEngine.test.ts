@@ -55,17 +55,36 @@ const sampleProfile: UserProfile = {
   applications: [],
 };
 
-test('calculateSkillMatch identifies missing JavaScript, React, Node.js for sample student', () => {
-  const result = calculateSkillMatch(sampleProfile.skills, fullStackRole);
-  assert.deepEqual(result.missingSkillNames, ['JavaScript', 'React', 'Node.js']);
-  assert.ok(result.overallReadinessPct > 15 && result.overallReadinessPct < 45);
+test('calculateSkillMatch starts strictly at 0% for unverified skills/certs/projects and scores only verified skills', () => {
+  // Unverified claimed skills + certifications + projects yield strictly 0% readiness
+  const unverifiedMatch = calculateSkillMatch(
+    sampleProfile.skills,
+    fullStackRole,
+    [{ id: 'c1', title: 'AWS CCP', issuer: 'AWS', year: '2026' }],
+    [{ id: 'p1', title: 'Portfolio', description: 'Built API', skillsUsed: ['React'] }],
+  );
+  assert.equal(unverifiedMatch.overallReadinessPct, 0);
+  assert.deepEqual(unverifiedMatch.missingSkillNames, ['JavaScript', 'React', 'Node.js', 'SQL', 'HTML/CSS']);
+
+  // Verified skills contribute proportionally + unlock portfolio bonus
+  const verifiedSkills = sampleProfile.skills.map((s) => ({ ...s, verified: true }));
+  const verifiedMatch = calculateSkillMatch(verifiedSkills, fullStackRole);
+  assert.deepEqual(verifiedMatch.missingSkillNames, ['JavaScript', 'React', 'Node.js']);
+  assert.ok(verifiedMatch.overallReadinessPct > 15 && verifiedMatch.overallReadinessPct < 45);
 });
 
-test('recalibrateFromAssessment triggers remedial focus when score < 60%', () => {
-  const outcome = recalibrateFromAssessment(sampleProfile, 'JavaScript', 42, fullStackRole);
-  assert.equal(outcome.remedialTriggered, true);
-  assert.ok(outcome.updatedProfile.remedialSkills.includes('JavaScript'));
-  assert.equal(outcome.updatedProfile.assessments[0].scorePct, 42);
+test('recalibrateFromAssessment gates progress on exam pass (>= 60%) and triggers remedial when < 60%', () => {
+  const failOutcome = recalibrateFromAssessment(sampleProfile, 'JavaScript', 42, fullStackRole);
+  assert.equal(failOutcome.remedialTriggered, true);
+  assert.equal(failOutcome.newReadinessPct, 0);
+  assert.ok(failOutcome.updatedProfile.remedialSkills.includes('JavaScript'));
+  assert.equal(failOutcome.updatedProfile.assessments[0].scorePct, 42);
+
+  const passOutcome = recalibrateFromAssessment(sampleProfile, 'JavaScript', 85, fullStackRole);
+  assert.equal(passOutcome.remedialTriggered, false);
+  assert.ok(passOutcome.newReadinessPct > 0);
+  const verifiedJs = passOutcome.updatedProfile.skills.find((s) => s.name === 'JavaScript');
+  assert.equal(verifiedJs?.verified, true);
 });
 
 test('generateAdaptiveRoadmap prioritizes remedial modules first', () => {
@@ -84,7 +103,7 @@ test('generateAdaptiveRoadmap prioritizes remedial modules first', () => {
     },
   ];
   const roadmap = generateAdaptiveRoadmap(
-    sampleProfile.skills,
+    sampleProfile.skills.map((s) => ({ ...s, verified: true })),
     fullStackRole,
     ['JavaScript'],
     [],
@@ -324,5 +343,52 @@ test('resumeHelpers computes completeness, sorts education, and exports Markdown
   assert.ok(md.includes('TaskFlow API'));
   assert.ok(md.includes('## Certifications Obtained'));
   assert.ok(md.includes('AWS Cloud Practitioner'));
+});
+
+import { CAREER_ROLES } from '../data/careerData';
+import { searchCareerRoles } from '../data/careerRolesCatalog';
+import { getAssessmentQuestionsForSkill } from '../data/assessmentBank';
+import { executeCodeInSandbox } from './codeSandbox';
+import { gradeInteractiveAssessment } from './skillEngine';
+
+test('CAREER_ROLES contains 200+ career goals and searchCareerRoles filters by keyword and domain', () => {
+  assert.ok(CAREER_ROLES.length >= 200, `Expected >=200 career roles, got ${CAREER_ROLES.length}`);
+  const roboticsMatches = searchCareerRoles(CAREER_ROLES, 'Robotics');
+  assert.ok(roboticsMatches.length > 0);
+  assert.ok(roboticsMatches.every((r) => `${r.title} ${r.domain} ${r.summary}`.toLowerCase().includes('robotics')));
+
+  const domainFiltered = searchCareerRoles(CAREER_ROLES, '', 'Cybersecurity & Risk');
+  assert.ok(domainFiltered.length > 0);
+  assert.ok(domainFiltered.every((r) => r.domain === 'Cybersecurity & Risk'));
+});
+
+test('getAssessmentQuestionsForSkill delivers >= 20 questions with coding problems and grades interactively', async () => {
+  const jsExam = getAssessmentQuestionsForSkill('JavaScript');
+  assert.ok(jsExam.length >= 20);
+  const jsCoding = jsExam.filter((q) => q.kind === 'coding');
+  assert.ok(jsCoding.length >= 4);
+
+  const arbitraryExam = getAssessmentQuestionsForSkill('Quantum Rust Systems');
+  assert.ok(arbitraryExam.length >= 20);
+  const dynCoding = arbitraryExam.filter((q) => q.kind === 'coding');
+  assert.ok(dynCoding.length >= 4);
+
+  // Execute one coding problem through sandbox and verify gradeInteractiveAssessment scoring
+  const firstDynCoding = dynCoding[0];
+  const run = await executeCodeInSandbox(
+    'function solve(scores, threshold) { return scores.filter((s) => s >= threshold).length; }',
+    firstDynCoding.testCases || [],
+  );
+  assert.equal(run.passed, true);
+
+  const mcqAnswers: Record<string, number> = {};
+  for (const q of arbitraryExam) {
+    if (q.kind === 'mcq') mcqAnswers[q.id] = q.correctIndex;
+  }
+  const codingPassMap: Record<string, boolean> = { [firstDynCoding.id]: run.passed };
+  const graded = gradeInteractiveAssessment(arbitraryExam, mcqAnswers, codingPassMap);
+  assert.equal(graded.totalQuestions, arbitraryExam.length);
+  assert.equal(graded.codingPassed, 1);
+  assert.ok(graded.scorePct >= 80);
 });
 

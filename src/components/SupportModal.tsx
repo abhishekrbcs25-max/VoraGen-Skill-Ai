@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Mail, Phone, ShieldCheck, User, X } from 'lucide-react';
+import { Mail, ShieldCheck, User, X } from 'lucide-react';
 
 interface SupportModalProps {
   open: boolean;
@@ -54,26 +54,20 @@ export function SupportModal({ open, onClose }: SupportModalProps) {
               <User className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Platform Lead & Support</p>
-              <p className="text-base font-semibold text-[#0B2545] dark:text-white">Abhishek R</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Platform Support & Inquiries</p>
+              <p className="text-base font-semibold text-[#0B2545] dark:text-white">
+                Vora Generation Network
+              </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-white/10">
+          <div className="grid grid-cols-1 gap-3 pt-2 border-t border-slate-200 dark:border-white/10">
             <a
-              href="mailto:abhishekr.bcs25@gmail.com"
+              href="mailto:voragenerationnetwork@gmail.com"
               className="flex items-center gap-2.5 rounded-lg border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] px-3 py-2.5 text-sm text-[#0B2545] dark:text-slate-200 hover:border-[#0B2545] dark:hover:border-amber-400 transition-colors"
             >
               <Mail className="w-4 h-4 text-[#0B2545] dark:text-amber-400 shrink-0" />
-              <span className="truncate">abhishekr.bcs25@gmail.com</span>
-            </a>
-
-            <a
-              href="tel:9745169331"
-              className="flex items-center gap-2.5 rounded-lg border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] px-3 py-2.5 text-sm font-mono tabular-nums text-[#0B2545] dark:text-slate-200 hover:border-emerald-600 dark:hover:border-emerald-400 transition-colors"
-            >
-              <Phone className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span>9745169331</span>
+              <span className="truncate">voragenerationnetwork@gmail.com</span>
             </a>
           </div>
         </div>

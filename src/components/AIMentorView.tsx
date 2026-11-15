@@ -18,7 +18,17 @@ import {
   VolumeX,
 } from 'lucide-react';
 import { MENTOR_STAFF } from '../data/careerData';
-import type { AIVideoLesson, CareerRole, SkillMatchBreakdown, UserProfile } from '../types';
+import {
+  buildLocalStudyToolResponse,
+  type StudyToolMode,
+} from '../utils/platformEngines';
+import type {
+  AIVideoLesson,
+  CareerRole,
+  SkillMatchBreakdown,
+  StudyLanguage,
+  UserProfile,
+} from '../types';
 import type { ChatModelId, GroundingSource, ThinkingPreset } from '../utils/aiHelpers';
 
 interface AIMentorViewProps {
@@ -29,7 +39,21 @@ interface AIMentorViewProps {
   initialSubTab?: string;
 }
 
-type StudioTab = 'faculty' | 'chatbot' | 'live-voice' | 'search-maps';
+type StudioTab = 'faculty' | 'study-tools' | 'chatbot' | 'live-voice' | 'search-maps';
+
+const STUDY_TOOL_OPTIONS: Array<{ id: StudyToolMode; label: string }> = [
+  { id: 'explain-simple', label: 'Explain Simply' },
+  { id: 'examples', label: 'Worked Examples' },
+  { id: 'practice-mcq', label: 'Practice MCQs' },
+  { id: 'coding-exercise', label: 'Coding Exercise' },
+  { id: 'debug-error', label: 'Debug / Explain Code' },
+  { id: 'summarize', label: 'Summarize Notes' },
+  { id: 'revision-sheet', label: 'Revision Sheet' },
+  { id: 'study-plan', label: '7-Day Study Plan' },
+  { id: 'weak-subject-check', label: 'Weak Subject Check' },
+];
+
+const STUDY_LANGUAGES: StudyLanguage[] = ['English', 'Tamil', 'Malayalam', 'Hindi', 'Spanish'];
 
 function downsampleTo16kPcmBase64(float32: Float32Array, inputSampleRate: number): string {
   const ratio = inputSampleRate / 16000;
@@ -54,7 +78,15 @@ export function AIMentorView({
   defaultVideoVoice = false,
   initialSubTab,
 }: AIMentorViewProps) {
-  const [activeTab, setActiveTab] = useState<StudioTab>('faculty');
+  const [activeTab, setActiveTab] = useState<StudioTab>(
+    initialSubTab === 'chatbot' ||
+      initialSubTab === 'study-tools' ||
+      initialSubTab === 'live-voice' ||
+      initialSubTab === 'search-maps' ||
+      initialSubTab === 'faculty'
+      ? initialSubTab
+      : 'faculty',
+  );
 
   const [selectedMentorId, setSelectedMentorId] = useState(MENTOR_STAFF[0].id);
   const selectedMentor =
@@ -63,9 +95,21 @@ export function AIMentorView({
     { role: 'assistant', text: MENTOR_STAFF[0].greeting },
   ]);
 
+  // AI Study Assistant Toolkit state
+  const [studyMode, setStudyMode] = useState<StudyToolMode>('explain-simple');
+  const [studyLanguage, setStudyLanguage] = useState<StudyLanguage>(
+    profile.preferredStudyLanguage || 'English',
+  );
+  const [studyInput, setStudyInput] = useState(
+    match.missingSkillNames[0] || targetRole.requiredSkills[0]?.name || 'React State & Closures',
+  );
+  const [studyOutput, setStudyOutput] = useState('');
+  const [studyLoading, setStudyLoading] = useState(false);
+
   useEffect(() => {
     if (
       initialSubTab === 'chatbot' ||
+      initialSubTab === 'study-tools' ||
       initialSubTab === 'live-voice' ||
       initialSubTab === 'search-maps' ||
       initialSubTab === 'faculty'
@@ -482,6 +526,65 @@ export function AIMentorView({
     }
   };
 
+  const handleRunStudyTool = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStudyLoading(true);
+    try {
+      const res = await fetch('/api/ai/study-tool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: studyMode,
+          topicOrCode: studyInput,
+          language: studyLanguage,
+          profile,
+          targetRoleTitle: targetRole.title,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { output?: string };
+        setStudyOutput(
+          data.output ||
+            buildLocalStudyToolResponse({
+              mode: studyMode,
+              topicOrCode: studyInput,
+              language: studyLanguage,
+              profile,
+              targetRoleTitle: targetRole.title,
+            }),
+        );
+      } else {
+        setStudyOutput(
+          buildLocalStudyToolResponse({
+            mode: studyMode,
+            topicOrCode: studyInput,
+            language: studyLanguage,
+            profile,
+            targetRoleTitle: targetRole.title,
+          }),
+        );
+      }
+    } catch {
+      setStudyOutput(
+        buildLocalStudyToolResponse({
+          mode: studyMode,
+          topicOrCode: studyInput,
+          language: studyLanguage,
+          profile,
+          targetRoleTitle: targetRole.title,
+        }),
+      );
+    } finally {
+      setStudyLoading(false);
+    }
+  };
+
+  const speakStudyResult = () => {
+    if (!studyOutput || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(studyOutput));
+  };
+
   const currentScene = videoLesson?.scenes[activeSceneIndex];
 
   return (
@@ -502,6 +605,7 @@ export function AIMentorView({
         {(
           [
             { id: 'faculty', label: 'AI Faculty & Video Studio', Icon: Video },
+            { id: 'study-tools', label: 'AI Study Assistant', Icon: Sparkles },
             { id: 'chatbot', label: 'Multi-Model Chatbot', Icon: Brain },
             { id: 'live-voice', label: 'Live Voice & Transcribe', Icon: Radio },
             { id: 'search-maps', label: 'Search & Maps Advisor', Icon: Globe },
@@ -522,6 +626,88 @@ export function AIMentorView({
           </button>
         ))}
       </div>
+
+      {/* TAB: AI Study Assistant Toolkit */}
+      {activeTab === 'study-tools' && (
+        <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-white/10">
+            <div>
+              <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
+                AI-Powered Learning &amp; Debugging Assistant
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Simplify complex concepts, generate practice MCQs &amp; coding drills, debug errors, summarize notes, and plan study weeks in 5 languages.
+              </p>
+            </div>
+            <select
+              value={studyLanguage}
+              onChange={(e) => setStudyLanguage(e.target.value as StudyLanguage)}
+              aria-label="Study assistant language"
+              className="rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-1.5 text-xs font-medium text-slate-900 dark:text-white"
+            >
+              {STUDY_LANGUAGES.map((lang) => (
+                <option key={lang} value={lang}>
+                  Language: {lang}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {STUDY_TOOL_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setStudyMode(opt.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                  studyMode === opt.id
+                    ? 'bg-[#0B2545] text-white dark:bg-[#1D4ED8]'
+                    : 'bg-[#F4F7FB] dark:bg-[#05070B] text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-[#1E3A5F]/60'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={handleRunStudyTool} className="space-y-3">
+            <textarea
+              rows={3}
+              value={studyInput}
+              onChange={(e) => setStudyInput(e.target.value)}
+              placeholder="Enter a concept, paste code/stacktrace to debug, or leave blank for personalized weak-subject review..."
+              aria-label="Study topic or code snippet"
+              className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] p-3 text-xs text-slate-900 dark:text-white"
+            />
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="submit"
+                disabled={studyLoading}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB]"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{studyLoading ? 'Generating...' : 'Run AI Study Assistant'}</span>
+              </button>
+              {studyOutput && (
+                <button
+                  type="button"
+                  onClick={speakStudyResult}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-[#1E3A5F]/70 text-slate-700 dark:text-slate-200"
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <span>Read Aloud (Voice Assistant)</span>
+                </button>
+              )}
+            </div>
+          </form>
+
+          {studyOutput && (
+            <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-4 text-xs text-slate-800 dark:text-slate-200 whitespace-pre-line leading-relaxed">
+              {studyOutput}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* TAB 1: Faculty & Interactive Video Studio */}
       {activeTab === 'faculty' && (

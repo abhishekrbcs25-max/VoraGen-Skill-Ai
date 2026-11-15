@@ -322,7 +322,7 @@ export function SettingsView({
               onClick={onOpenSupport}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold border border-amber-500/45 text-[#0B2545] dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10"
             >
-              <span>Contact Support (Abhishek R)</span>
+              <span>Contact Support (Vora Generation Network)</span>
             </button>
           </div>
         </section>

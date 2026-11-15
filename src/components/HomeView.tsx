@@ -196,7 +196,7 @@ export function HomeView({
               <strong className="text-[#0B2545] dark:text-emerald-400">
                 {Array.from(
                   new Set([
-                    ...profile.skills.filter((s) => s.level >= 60).map((s) => s.name),
+                    ...profile.skills.filter((s) => s.verified && s.level >= 60).map((s) => s.name),
                     ...match.strongSkillNames,
                   ]),
                 ).join(', ') || 'your core profile'}

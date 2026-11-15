@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Award, CheckCircle2, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Award, CheckCircle2, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
+import { searchCareerRoles } from '../data/careerRolesCatalog';
 import type { CareerRole, UserProfile, UserSkill } from '../types';
 
 interface OnboardingWizardModalProps {
@@ -38,6 +39,17 @@ export function OnboardingWizardModal({
   const [goalInput, setGoalInput] = useState('');
   const [certInput, setCertInput] = useState('');
   const [projectInput, setProjectInput] = useState('');
+  const [careerSearchInput, setCareerSearchInput] = useState('');
+  const [careerAppliedQuery, setCareerAppliedQuery] = useState('');
+
+  const matchingRoles = useMemo(() => {
+    const res = searchCareerRoles(roles, careerAppliedQuery);
+    const selected = roles.find((r) => r.id === targetCareerId);
+    if (selected && !res.some((r) => r.id === selected.id)) {
+      return [selected, ...res];
+    }
+    return res;
+  }, [roles, careerAppliedQuery, targetCareerId]);
 
   useEffect(() => {
     if (open) {
@@ -177,20 +189,49 @@ export function OnboardingWizardModal({
             </div>
           </div>
 
-          <div>
-            <label
-              htmlFor="onboard-career"
-              className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1"
-            >
-              Target Career Goal
-            </label>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label
+                htmlFor="onboard-career"
+                className="block text-xs font-medium text-slate-700 dark:text-slate-300"
+              >
+                Target Career Goal ({matchingRoles.length} of {roles.length} roles)
+              </label>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="search"
+                value={careerSearchInput}
+                onChange={(e) => {
+                  setCareerSearchInput(e.target.value);
+                  if (!e.target.value.trim()) setCareerAppliedQuery('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    setCareerAppliedQuery(careerSearchInput);
+                  }
+                }}
+                placeholder="Search 200+ career goals (e.g., AI, Cloud, Security, Robotics)..."
+                aria-label="Search onboarding career goals"
+                className="flex-1 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-1.5 text-xs text-slate-900 dark:text-white"
+              />
+              <button
+                type="button"
+                onClick={() => setCareerAppliedQuery(careerSearchInput)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB]"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Search</span>
+              </button>
+            </div>
             <select
               id="onboard-career"
               value={targetCareerId}
               onChange={(e) => setTargetCareerId(e.target.value)}
               className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
             >
-              {roles.map((r) => (
+              {matchingRoles.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.title} ({r.domain})
                 </option>

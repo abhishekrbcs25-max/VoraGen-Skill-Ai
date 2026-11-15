@@ -1,6 +1,8 @@
-import type { CareerRole, LearningModule, MentorTeacher, UserProfile } from '../types';
+import type { AssessmentQuestion, CareerRole, LearningModule, MentorTeacher, UserProfile } from '../types';
+import { GENERATED_EXTENDED_CAREER_ROLES } from './careerRolesCatalog';
+import { ASSESSMENT_QUESTION_BANKS } from './assessmentBank';
 
-export const CAREER_ROLES: CareerRole[] = [
+export const FLAGSHIP_CAREER_ROLES: CareerRole[] = [
   {
     id: 'fullstack-dev',
     title: 'Full Stack Developer',
@@ -101,6 +103,11 @@ export const CAREER_ROLES: CareerRole[] = [
       { name: 'REST & GraphQL APIs', targetLevel: 75, weight: 3, category: 'Backend' },
     ],
   },
+];
+
+export const CAREER_ROLES: CareerRole[] = [
+  ...FLAGSHIP_CAREER_ROLES,
+  ...GENERATED_EXTENDED_CAREER_ROLES,
 ];
 
 export const LEARNING_CATALOG: LearningModule[] = [
@@ -316,320 +323,9 @@ export const MENTOR_STAFF: MentorTeacher[] = [
   },
 ];
 
-export interface DiagnosticQuestion {
-  id: string;
-  skillName: string;
-  question: string;
-  options: string[];
-  correctIndex: number;
-  explanation: string;
-}
+export type DiagnosticQuestion = AssessmentQuestion;
 
-export const DIAGNOSTIC_QUIZZES: Record<string, DiagnosticQuestion[]> = {
-  JavaScript: [
-    {
-      id: 'js-q1',
-      skillName: 'JavaScript',
-      question: 'What does `Promise.all([p1, p2])` do if `p2` rejects?',
-      options: [
-        'Waits for p1 and resolves with [result1, null]',
-        'Immediately rejects with p2’s rejection reason',
-        'Retries p2 automatically once',
-        'Ignores p2 and returns only p1',
-      ],
-      correctIndex: 1,
-      explanation: 'Promise.all fails fast: as soon as any promise rejects, the combined promise rejects with that error.',
-    },
-    {
-      id: 'js-q2',
-      skillName: 'JavaScript',
-      question: 'Which statement accurately describes a JavaScript closure?',
-      options: [
-        'A function bundled together with references to its lexical outer scope',
-        'A syntax error thrown when closing curly braces are missing',
-        'A built-in method to terminate Web Workers',
-        'A class constructor that cannot be inherited',
-      ],
-      correctIndex: 0,
-      explanation: 'Closures allow inner functions to retain access to variables from their enclosing lexical scope even after the outer function returns.',
-    },
-    {
-      id: 'js-q3',
-      skillName: 'JavaScript',
-      question: 'In the browser event loop, which queue runs before the next macrotask (`setTimeout`)?',
-      options: [
-        'Animation frame callbacks only',
-        'The microtask queue (e.g., Promise `.then` callbacks)',
-        'Network socket listeners',
-        'Idle callbacks',
-      ],
-      correctIndex: 1,
-      explanation: 'After each macrotask completes, the JS engine drains the entire microtask queue before picking the next macrotask.',
-    },
-  ],
-  React: [
-    {
-      id: 'react-q1',
-      skillName: 'React',
-      question: 'Why must items in a React `.map()` list have a stable, unique `key` prop?',
-      options: [
-        'To encrypt the DOM nodes for security',
-        'So React reconciliation can track identity across insertions, reorders, and deletions',
-        'To automatically style alternating rows',
-        'It is required only when using TypeScript',
-      ],
-      correctIndex: 1,
-      explanation: 'Stable keys let React match elements across renders without recreating state or mutating the wrong nodes.',
-    },
-    {
-      id: 'react-q2',
-      skillName: 'React',
-      question: 'When updating state based on the previous state value, what is the safest pattern?',
-      options: [
-        'setCount(count + 1)',
-        'setCount(prev => prev + 1)',
-        'this.state.count++',
-        'Mutating a ref inside JSX',
-      ],
-      correctIndex: 1,
-      explanation: 'Functional updater callbacks receive the latest queued state, preventing stale-closure bugs during batched updates.',
-    },
-    {
-      id: 'react-q3',
-      skillName: 'React',
-      question: 'What is the purpose of returning a cleanup function from `useEffect`?',
-      options: [
-        'To clear browser localStorage automatically',
-        'To unsubscribe timers, listeners, or abort fetches before re-running or unmounting',
-        'To compile CSS modules',
-        'To force a full page reload',
-      ],
-      correctIndex: 1,
-      explanation: 'Cleanup functions prevent memory leaks and stale event listeners when dependencies change or the component unmounts.',
-    },
-  ],
-  'Node.js': [
-    {
-      id: 'node-q1',
-      skillName: 'Node.js',
-      question: 'In Express, what happens if a middleware forgets to call `next()` and does not send a response?',
-      options: [
-        'Express sends 200 OK automatically',
-        'The client request hangs until it times out',
-        'Node.js restarts the process',
-        'It skips to the error handler',
-      ],
-      correctIndex: 1,
-      explanation: 'Express middleware must either terminate the request-response cycle (`res.json`/`res.send`) or pass control via `next()`.',
-    },
-    {
-      id: 'node-q2',
-      skillName: 'Node.js',
-      question: 'Why should CPU-heavy synchronous loops be avoided on the main Node.js thread?',
-      options: [
-        'They block the single-threaded event loop, stalling all concurrent requests',
-        'Node.js only supports asynchronous `for` loops',
-        'They disable HTTPS encryption',
-        'They delete environment variables',
-      ],
-      correctIndex: 0,
-      explanation: 'Node.js handles I/O concurrency on a single JS event loop; blocking CPU work prevents other requests from being served.',
-    },
-    {
-      id: 'node-q3',
-      skillName: 'Node.js',
-      question: 'Which HTTP status code is most appropriate for a missing required field in a POST request body?',
-      options: ['200 OK', '400 Bad Request', '301 Moved Permanently', '502 Bad Gateway'],
-      correctIndex: 1,
-      explanation: '400 Bad Request indicates client-side validation failure such as malformed JSON or missing required parameters.',
-    },
-  ],
-  Python: [
-    {
-      id: 'py-q1',
-      skillName: 'Python',
-      question: 'What is the time complexity of checking key membership `k in my_dict` in Python?',
-      options: ['O(n)', 'O(log n)', 'O(1) average', 'O(n^2)'],
-      correctIndex: 2,
-      explanation: 'Python dictionaries are hash tables, giving average O(1) lookup time.',
-    },
-    {
-      id: 'py-q2',
-      skillName: 'Python',
-      question: 'Why is using a mutable default argument like `def add_item(x, lst=[]):` a classic Python pitfall?',
-      options: [
-        'Lists cannot be passed as parameters',
-        'The default list object is created once at function definition and shared across calls',
-        'Python converts it into a tuple',
-        'It triggers a syntax error in Python 3',
-      ],
-      correctIndex: 1,
-      explanation: 'Default argument values are evaluated once when `def` executes; use `lst=None` and initialize inside the body.',
-    },
-    {
-      id: 'py-q3',
-      skillName: 'Python',
-      question: 'What does a Python generator function using `yield` return when called?',
-      options: [
-        'A complete list in memory immediately',
-        'A lazy iterator that produces values on demand',
-        'A boolean status flag',
-        'A serialized JSON string',
-      ],
-      correctIndex: 1,
-      explanation: 'Generators compute items lazily one at a time, saving memory on large streams.',
-    },
-  ],
-  SQL: [
-    {
-      id: 'sql-q1',
-      skillName: 'SQL',
-      question: 'Which SQL clause filters grouped aggregate results (e.g., `COUNT(*) > 5`)?',
-      options: ['WHERE', 'HAVING', 'ORDER BY', 'DISTINCT'],
-      correctIndex: 1,
-      explanation: '`WHERE` filters rows before grouping; `HAVING` filters groups after `GROUP BY`.',
-    },
-    {
-      id: 'sql-q2',
-      skillName: 'SQL',
-      question: 'What does a `LEFT JOIN` return when a row in the left table has no match in the right table?',
-      options: [
-        'It drops the row completely',
-        'It keeps the left row with NULL values for the right table columns',
-        'It throws a foreign key violation',
-        'It duplicates the entire table',
-      ],
-      correctIndex: 1,
-      explanation: 'LEFT JOIN preserves all rows from the left table and fills unmatched right columns with NULL.',
-    },
-    {
-      id: 'sql-q3',
-      skillName: 'SQL',
-      question: 'How does an index primarily speed up `SELECT` queries?',
-      options: [
-        'By compressing images in the database',
-        'By maintaining a B-tree or hash structure that avoids full table scans',
-        'By deleting duplicate rows automatically',
-        'By bypassing authentication',
-      ],
-      correctIndex: 1,
-      explanation: 'Indexes create sorted lookup trees so the query planner jumps straight to matching row pointers.',
-    },
-  ],
-  TypeScript: [
-    {
-      id: 'ts-q1',
-      skillName: 'TypeScript',
-      question: 'What is the key safety advantage of `unknown` over `any` in TypeScript?',
-      options: [
-        '`unknown` forces type narrowing before accessing properties or calling methods',
-        '`unknown` compiles faster at runtime in browsers',
-        '`any` is only allowed in `.js` files',
-        '`unknown` automatically converts strings to numbers',
-      ],
-      correctIndex: 0,
-      explanation: '`unknown` requires explicit type guards before use, preventing silent runtime TypeErrors.',
-    },
-    {
-      id: 'ts-q2',
-      skillName: 'TypeScript',
-      question: 'What does a discriminated union enable in TypeScript?',
-      options: [
-        'Connecting two SQL tables',
-        'Exhaustive `switch` narrowing via a shared literal tag field like `status` or `type`',
-        'Bypassing strict null checks',
-        'Importing CSS modules without declarations',
-      ],
-      correctIndex: 1,
-      explanation: 'A literal discriminant lets TypeScript infer exact payload shapes per branch.',
-    },
-    {
-      id: 'ts-q3',
-      skillName: 'TypeScript',
-      question: 'What does `Partial<User>` produce?',
-      options: [
-        'Makes all properties of `User` readonly',
-        'Makes all top-level properties of `User` optional',
-        'Deletes private properties from `User`',
-        'Extracts only string fields of `User`',
-      ],
-      correctIndex: 1,
-      explanation: '`Partial<T>` maps every property of `T` to optional (`?`).',
-    },
-  ],
-  'HTML/CSS': [
-    {
-      id: 'hc-q1',
-      skillName: 'HTML/CSS',
-      question: 'Why should interactive controls use `<button>` rather than `<div onClick={...}>`?',
-      options: [
-        'Divs cannot have CSS backgrounds',
-        'Native buttons provide keyboard focus, Enter/Space activation, and screen-reader semantics automatically',
-        'Buttons load faster over HTTP',
-        'Divs cannot trigger React state updates',
-      ],
-      correctIndex: 1,
-      explanation: 'Native `<button>` elements include built-in accessibility roles and keyboard handling.',
-    },
-    {
-      id: 'hc-q2',
-      skillName: 'HTML/CSS',
-      question: 'In CSS Flexbox, what does `flex-shrink: 0` prevent?',
-      options: [
-        'Text wrapping inside paragraphs',
-        'An item from compressing below its base size when container space is tight',
-        'Vertical scrolling on mobile',
-        'Hover transitions',
-      ],
-      correctIndex: 1,
-      explanation: '`flex-shrink: 0` preserves an element’s width/height in constrained flex rows.',
-    },
-    {
-      id: 'hc-q3',
-      skillName: 'HTML/CSS',
-      question: 'What does `box-sizing: border-box` change?',
-      options: [
-        'Centers all elements horizontally',
-        'Includes padding and border inside the element’s declared width and height',
-        'Removes default browser margins',
-        'Applies a 1px shadow automatically',
-      ],
-      correctIndex: 1,
-      explanation: 'With `border-box`, declared width equals content + padding + border.',
-    },
-  ],
-  'Machine Learning': [
-    {
-      id: 'ml-q1',
-      skillName: 'Machine Learning',
-      question: 'Why must feature scaling or normalization fit ONLY on the training split before transforming validation/test data?',
-      options: [
-        'To reduce disk storage',
-        'To prevent data leakage from test statistics into training',
-        'Python raises a syntax error otherwise',
-        'Validation data does not contain numbers',
-      ],
-      correctIndex: 1,
-      explanation: 'Fitting scalers on test data leaks distribution statistics and inflates evaluation scores.',
-    },
-    {
-      id: 'ml-q2',
-      skillName: 'Machine Learning',
-      question: 'If a model achieves 99% training accuracy and 61% validation accuracy, what is happening?',
-      options: ['Underfitting', 'Overfitting', 'Zero gradient', 'Class balance'],
-      correctIndex: 1,
-      explanation: 'A large gap between training and validation performance signals overfitting to training noise.',
-    },
-    {
-      id: 'ml-q3',
-      skillName: 'Machine Learning',
-      question: 'Which metric is more informative than raw accuracy on a 99:1 imbalanced fraud dataset?',
-      options: ['Mean pixel brightness', 'Precision-Recall / F1 score', 'Training epoch count', 'Learning rate'],
-      correctIndex: 1,
-      explanation: 'Precision-Recall and F1 measure minority-class detection rather than majority-class guessing.',
-    },
-  ],
-};
+export const DIAGNOSTIC_QUIZZES: Record<string, DiagnosticQuestion[]> = ASSESSMENT_QUESTION_BANKS;
 
 export function createBlankUnauthenticatedProfile(): UserProfile {
   return {
@@ -637,21 +333,47 @@ export function createBlankUnauthenticatedProfile(): UserProfile {
     name: '',
     email: '',
     authProvider: 'email',
+    role: 'student',
     isSignedIn: false,
+    avatarUrl: '',
     headline: '',
     education: '',
     phone: '',
+    dateOfBirth: '',
     location: '',
+    preferredWorkLocation: '',
     linkedinUrl: '',
     githubUrl: '',
     portfolioUrl: '',
     resumeSummary: '',
+    currentEducationStatus: undefined,
+    collegeName: '',
+    graduationYear: '',
+    cgpaOrPercentage: '',
     educationHistory: [],
     targetCareerId: 'fullstack-dev',
     careerGoals: [],
     skills: [],
+    nonTechnicalSkills: [],
+    softSkills: [],
+    languagesKnown: [],
+    workExperience: [],
+    internshipExperience: [],
     certifications: [],
     projects: [],
+    achievements: [],
+    uploadedResume: undefined,
+    careerInterests: [],
+    preferredJobRoles: [],
+    expectedSalary: '',
+    employmentPreferences: [],
+    workModePreference: undefined,
+    availabilityNoticePeriod: '',
+    profileVisibility: 'recruiters',
+    emailVerified: false,
+    phoneVerified: false,
+    twoFactorEnabled: false,
+    twoFactorMethod: 'email',
     assessments: [],
     completedModuleIds: [],
     remedialSkills: [],
@@ -661,6 +383,26 @@ export function createBlankUnauthenticatedProfile(): UserProfile {
     gamesWon: 0,
     applications: [],
     needsOnboarding: false,
+    enrolledCourseIds: [],
+    completedLessonIds: [],
+    bookmarkedLessonIds: [],
+    lessonNotes: {},
+    offlineCourseIds: [],
+    preferredStudyLanguage: 'English',
+    savedJobIds: [],
+    jobAlertsEnabled: true,
+    registeredDriveIds: [],
+    registeredFairIds: [],
+    resumeTemplate: 'classic-executive',
+    resumeVersions: [],
+    coverLetters: [],
+    earnedBadgeIds: [],
+    subscriptionPlan: 'free',
+    autoRenewSubscription: true,
+    referredUsersCount: 0,
+    scheduledInterviews: [],
+    interviewHistory: [],
+    aptitudeHistory: [],
   };
 }
 
@@ -668,27 +410,68 @@ export function createFreshUserProfile(params: {
   name: string;
   email: string;
   authProvider: UserProfile['authProvider'];
+  role?: UserProfile['role'];
+  phone?: string;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
+  acceptedTermsAt?: string;
+  acceptedPrivacyAt?: string;
 }): UserProfile {
   return {
     id: `learner-${Date.now()}`,
     name: params.name,
     email: params.email,
     authProvider: params.authProvider,
+    role: params.role || 'student',
     isSignedIn: true,
-    headline: 'New VoraGen Learner',
+    avatarUrl: '',
+    headline:
+      params.role === 'employer'
+        ? 'Employer / Talent Partner'
+        : params.role === 'working-professional'
+          ? 'Working Professional'
+          : params.role === 'admin'
+            ? 'Workspace Administrator'
+            : 'New VoraGen Learner',
     education: '',
-    phone: '',
+    phone: params.phone || '',
+    dateOfBirth: '',
     location: '',
+    preferredWorkLocation: '',
     linkedinUrl: '',
     githubUrl: '',
     portfolioUrl: '',
     resumeSummary: '',
+    currentEducationStatus: undefined,
+    collegeName: '',
+    graduationYear: '',
+    cgpaOrPercentage: '',
     educationHistory: [],
     targetCareerId: 'fullstack-dev',
     careerGoals: [],
     skills: [],
+    nonTechnicalSkills: [],
+    softSkills: [],
+    languagesKnown: [],
+    workExperience: [],
+    internshipExperience: [],
     certifications: [],
     projects: [],
+    achievements: [],
+    uploadedResume: undefined,
+    careerInterests: [],
+    preferredJobRoles: [],
+    expectedSalary: '',
+    employmentPreferences: [],
+    workModePreference: undefined,
+    availabilityNoticePeriod: '',
+    profileVisibility: 'recruiters',
+    emailVerified: Boolean(params.emailVerified),
+    phoneVerified: Boolean(params.phoneVerified),
+    twoFactorEnabled: false,
+    twoFactorMethod: params.authProvider === 'phone' ? 'phone' : 'email',
+    acceptedTermsAt: params.acceptedTermsAt,
+    acceptedPrivacyAt: params.acceptedPrivacyAt,
     assessments: [],
     completedModuleIds: [],
     remedialSkills: [],
@@ -698,6 +481,27 @@ export function createFreshUserProfile(params: {
     gamesWon: 0,
     applications: [],
     needsOnboarding: true,
+    enrolledCourseIds: [],
+    completedLessonIds: [],
+    bookmarkedLessonIds: [],
+    lessonNotes: {},
+    offlineCourseIds: [],
+    preferredStudyLanguage: 'English',
+    savedJobIds: [],
+    jobAlertsEnabled: true,
+    registeredDriveIds: [],
+    registeredFairIds: [],
+    resumeTemplate: 'classic-executive',
+    resumeVersions: [],
+    coverLetters: [],
+    earnedBadgeIds: [],
+    subscriptionPlan: 'free',
+    autoRenewSubscription: true,
+    referralCode: `VORA-${(params.name || 'USER').replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() || '2026'}`,
+    referredUsersCount: 0,
+    scheduledInterviews: [],
+    interviewHistory: [],
+    aptitudeHistory: [],
   };
 }
 

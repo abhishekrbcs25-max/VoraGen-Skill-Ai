@@ -55,6 +55,8 @@ test('API serves /api/config/maps, /api/profile/reset, and enforces rate limits 
         email: 'reset@voragen.test',
         password: 'password123',
         authProvider: 'email',
+        acceptedTerms: true,
+        acceptedPrivacy: true,
       }),
     });
     assert.equal(reg.status, 200);
@@ -499,6 +501,7 @@ test('API enforces auth errors, sanitizes /api/profile updates, and handles Gemi
   await withServer(app, async (baseUrl) => {
     const health = await fetch(`${baseUrl}/api/health`);
     assert.equal(health.status, 200);
+    assert.match(health.headers.get('permissions-policy') || '', /geolocation=\(self\)/);
 
     // Auth validation checks
     assert.equal(
@@ -525,7 +528,13 @@ test('API enforces auth errors, sanitizes /api/profile updates, and handles Gemi
     const regRes = await fetch(`${baseUrl}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Riya', email: 'riya@voragen.test', password: 'password123' }),
+      body: JSON.stringify({
+        name: 'Riya',
+        email: 'riya@voragen.test',
+        password: 'password123',
+        acceptedTerms: true,
+        acceptedPrivacy: true,
+      }),
     });
     assert.equal(regRes.status, 200);
     const { token, profile } = (await regRes.json()) as { token: string; profile: { name: string } };
@@ -536,7 +545,13 @@ test('API enforces auth errors, sanitizes /api/profile updates, and handles Gemi
         await fetch(`${baseUrl}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: 'Riya', email: 'riya@voragen.test', password: 'password123' }),
+          body: JSON.stringify({
+            name: 'Riya',
+            email: 'riya@voragen.test',
+            password: 'password123',
+            acceptedTerms: true,
+            acceptedPrivacy: true,
+          }),
         })
       ).status,
       409,
@@ -564,8 +579,17 @@ test('API enforces auth errors, sanitizes /api/profile updates, and handles Gemi
       404,
     );
 
-    // GET & PUT /api/profile protection + sanitization
+    // GET & PUT /api/profile protection + sanitization + 404 profileNotFound distinction
     assert.equal((await fetch(`${baseUrl}/api/profile?key=riya@voragen.test`)).status, 401);
+    const { signSessionToken } = await import('./utils/securityHelpers');
+    const missingUserToken = signSessionToken('missing@voragen.test');
+    const missingRes = await fetch(`${baseUrl}/api/profile?key=missing@voragen.test`, {
+      headers: { 'x-voragen-token': missingUserToken },
+    });
+    assert.equal(missingRes.status, 404);
+    const missingBody = (await missingRes.json()) as { profileNotFound?: boolean };
+    assert.equal(missingBody.profileNotFound, true);
+
     assert.equal(
       (
         await fetch(`${baseUrl}/api/profile?key=riya@voragen.test`, {
@@ -653,4 +677,275 @@ test('API enforces auth errors, sanitizes /api/profile updates, and handles Gemi
     );
   });
 });
+
+test('Auth API supports roles, terms/privacy enforcement, Phone/OTP, email verify, password reset, 2FA, admin login, multi-device sessions, and account deletion', async () => {
+  const app = createApiApp({
+    profileStore: {},
+    credentialsStore: {},
+    sessionsStore: {},
+    otpStore: {},
+    persistStores: false,
+    authLimiter: new SlidingWindowRateLimiter(100, 60_000),
+    aiLimiter: new SlidingWindowRateLimiter(100, 60_000),
+  });
+
+  await withServer(app, async (baseUrl) => {
+    // 1. Missing terms/privacy rejected with 400; self-registration as admin rejected with 403
+    assert.equal(
+      (
+        await fetch(`${baseUrl}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'No Terms',
+            email: 'noterms@voragen.test',
+            password: 'password123',
+            role: 'student',
+            acceptedTerms: false,
+            acceptedPrivacy: true,
+          }),
+        })
+      ).status,
+      400,
+    );
+
+    assert.equal(
+      (
+        await fetch(`${baseUrl}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'Self Admin',
+            email: 'badadmin@voragen.test',
+            password: 'password123',
+            role: 'admin',
+            acceptedTerms: true,
+            acceptedPrivacy: true,
+          }),
+        })
+      ).status,
+      403,
+    );
+
+    // 2. Register employer role successfully
+    const empReg = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Kavya Recruiter',
+        email: 'kavya@voragen.test',
+        password: 'password123',
+        role: 'employer',
+        acceptedTerms: true,
+        acceptedPrivacy: true,
+      }),
+    });
+    assert.equal(empReg.status, 200);
+    const empData = (await empReg.json()) as {
+      token: string;
+      profile: { role: string; emailVerified: boolean };
+    };
+    assert.equal(empData.profile.role, 'employer');
+    assert.equal(empData.profile.emailVerified, false);
+
+    // Non-admin cannot sign into Admin portal (403)
+    assert.equal(
+      (
+        await fetch(`${baseUrl}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: 'kavya@voragen.test',
+            password: 'password123',
+            portalMode: 'admin',
+          }),
+        })
+      ).status,
+      403,
+    );
+
+    // 3. Admin bootstrap & Admin login
+    const adminStatusBefore = (await (await fetch(`${baseUrl}/api/auth/admin-status`)).json()) as {
+      hasAdmin: boolean;
+    };
+    assert.equal(adminStatusBefore.hasAdmin, false);
+
+    const adminBoot = await fetch(`${baseUrl}/api/auth/admin-bootstrap`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Root Admin',
+        email: 'root@voragen.test',
+        password: 'AdminPassword!99',
+        acceptedTerms: true,
+        acceptedPrivacy: true,
+      }),
+    });
+    assert.equal(adminBoot.status, 200);
+    const adminLoginOk = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'root@voragen.test',
+        password: 'AdminPassword!99',
+        portalMode: 'admin',
+      }),
+    });
+    assert.equal(adminLoginOk.status, 200);
+
+    // 4. Email verification OTP
+    const emailOtpSend = await fetch(`${baseUrl}/api/auth/otp/send?key=kavya@voragen.test`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-voragen-token': empData.token,
+      },
+      body: JSON.stringify({
+        target: 'kavya@voragen.test',
+        channel: 'email',
+        purpose: 'email-verify',
+      }),
+    });
+    assert.equal(emailOtpSend.status, 200);
+    const emailOtpBody = (await emailOtpSend.json()) as { challengeId: string; devPreviewCode: string };
+    const emailOtpVerify = await fetch(`${baseUrl}/api/auth/otp/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challengeId: emailOtpBody.challengeId, code: emailOtpBody.devPreviewCode }),
+    });
+    assert.equal(emailOtpVerify.status, 200);
+    const verifiedProf = (await emailOtpVerify.json()) as { profile: { emailVerified: boolean } };
+    assert.equal(verifiedProf.profile.emailVerified, true);
+
+    // 5. Enable 2FA -> login returns requires2FA -> verify 2FA issues 2nd device session
+    const toggle2fa = await fetch(`${baseUrl}/api/auth/2fa/toggle?key=kavya@voragen.test`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-voragen-token': empData.token,
+      },
+      body: JSON.stringify({ enabled: true, method: 'email' }),
+    });
+    assert.equal(toggle2fa.status, 200);
+
+    const loginWith2fa = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 Chrome/125.0' },
+      body: JSON.stringify({ email: 'kavya@voragen.test', password: 'password123' }),
+    });
+    assert.equal(loginWith2fa.status, 200);
+    const twoFaPrompt = (await loginWith2fa.json()) as {
+      requires2FA: boolean;
+      challengeId: string;
+      devPreviewCode: string;
+    };
+    assert.equal(twoFaPrompt.requires2FA, true);
+
+    const twoFaVerify = await fetch(`${baseUrl}/api/auth/2fa/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 Firefox/126.0' },
+      body: JSON.stringify({
+        challengeId: twoFaPrompt.challengeId,
+        code: twoFaPrompt.devPreviewCode,
+      }),
+    });
+    assert.equal(twoFaVerify.status, 200);
+    const { token: device2Token } = (await twoFaVerify.json()) as { token: string };
+    assert.ok(device2Token);
+
+    // 6. Multi-device session listing & revoking other device
+    const sessionsRes = await fetch(`${baseUrl}/api/auth/sessions?key=kavya@voragen.test`, {
+      headers: { 'x-voragen-token': device2Token },
+    });
+    assert.equal(sessionsRes.status, 200);
+    const sessBody = (await sessionsRes.json()) as {
+      sessions: Array<{ sessionId: string; isCurrent: boolean }>;
+    };
+    assert.equal(sessBody.sessions.length, 2);
+    assert.equal(sessBody.sessions.filter((s) => s.isCurrent).length, 1);
+
+    const revokeOthers = await fetch(`${baseUrl}/api/auth/sessions/revoke-others?key=kavya@voragen.test`, {
+      method: 'POST',
+      headers: { 'x-voragen-token': device2Token },
+    });
+    assert.equal(revokeOthers.status, 200);
+    // Revoked device 1 token now rejected with 401
+    assert.equal(
+      (
+        await fetch(`${baseUrl}/api/profile?key=kavya@voragen.test`, {
+          headers: { 'x-voragen-token': empData.token },
+        })
+      ).status,
+      401,
+    );
+
+    // 7. Forgot & Reset Password via OTP -> revokes sessions & works with new password
+    const resetSend = await fetch(`${baseUrl}/api/auth/otp/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'kavya@voragen.test', channel: 'email', purpose: 'password-reset' }),
+    });
+    const resetOtp = (await resetSend.json()) as { challengeId: string; devPreviewCode: string };
+    const resetDone = await fetch(`${baseUrl}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        challengeId: resetOtp.challengeId,
+        code: resetOtp.devPreviewCode,
+        newPassword: 'newPassword!456',
+      }),
+    });
+    assert.equal(resetDone.status, 200);
+
+    // 8. Phone number authentication via OTP (new phone user)
+    const phoneSend = await fetch(`${baseUrl}/api/auth/otp/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: '+919876543210', channel: 'phone', purpose: 'phone-auth' }),
+    });
+    assert.equal(phoneSend.status, 200);
+    const phoneChallenge = (await phoneSend.json()) as { challengeId: string; devPreviewCode: string };
+
+    const phoneVerify = await fetch(`${baseUrl}/api/auth/otp/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        challengeId: phoneChallenge.challengeId,
+        code: phoneChallenge.devPreviewCode,
+        name: 'Phone Learner',
+        role: 'job-seeker',
+        acceptedTerms: true,
+        acceptedPrivacy: true,
+      }),
+    });
+    assert.equal(phoneVerify.status, 200);
+    const phoneBody = (await phoneVerify.json()) as {
+      key: string;
+      token: string;
+      profile: { phoneVerified: boolean; role: string };
+    };
+    assert.equal(phoneBody.profile.phoneVerified, true);
+    assert.equal(phoneBody.profile.role, 'job-seeker');
+
+    // 9. Account deletion permanently removes profile & sessions
+    const deleteRes = await fetch(`${baseUrl}/api/profile?key=${encodeURIComponent(phoneBody.key)}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-voragen-token': phoneBody.token,
+      },
+      body: JSON.stringify({ confirmEmail: 'DELETE' }),
+    });
+    assert.equal(deleteRes.status, 200);
+    assert.equal(
+      (
+        await fetch(`${baseUrl}/api/profile?key=${encodeURIComponent(phoneBody.key)}`, {
+          headers: { 'x-voragen-token': phoneBody.token },
+        })
+      ).status,
+      401,
+    );
+  });
+});
+
 

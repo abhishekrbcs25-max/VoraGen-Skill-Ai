@@ -157,7 +157,7 @@ export function buildResumeMarkdown(profile: UserProfile, targetRoleTitle: strin
   if (profile.certifications.length > 0) {
     for (const cert of profile.certifications) {
       lines.push(
-        `- **${cert.title}** — ${cert.issuer} (${cert.year})${cert.credentialId ? ` · ID: ${cert.credentialId}` : ''}`,
+        `- **${cert.title}** — ${cert.issuer} (${cert.year})${cert.expiryDate ? ` · Expires: ${cert.expiryDate}` : ''}${cert.credentialId ? ` · ID: ${cert.credentialId}` : ''}${cert.credentialUrl ? ` · URL: ${cert.credentialUrl}` : ''}`,
       );
     }
   } else {

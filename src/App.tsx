@@ -48,6 +48,42 @@ const SettingsView = lazy(() =>
 const SkillArena3DGame = lazy(() =>
   import('./components/SkillArena3DGame').then((m) => ({ default: m.SkillArena3DGame })),
 );
+const CoursesHubView = lazy(() =>
+  import('./components/CoursesHubView').then((m) => ({ default: m.CoursesHubView })),
+);
+const ProjectsView = lazy(() =>
+  import('./components/ProjectsView').then((m) => ({ default: m.ProjectsView })),
+);
+const CertificationsPassportView = lazy(() =>
+  import('./components/CertificationsPassportView').then((m) => ({
+    default: m.CertificationsPassportView,
+  })),
+);
+const ApplicationsDrivesView = lazy(() =>
+  import('./components/ApplicationsDrivesView').then((m) => ({
+    default: m.ApplicationsDrivesView,
+  })),
+);
+const CommunityMentorsView = lazy(() =>
+  import('./components/CommunityMentorsView').then((m) => ({ default: m.CommunityMentorsView })),
+);
+const NotificationsCenterView = lazy(() =>
+  import('./components/NotificationsCenterView').then((m) => ({
+    default: m.NotificationsCenterView,
+  })),
+);
+const EmployerPortalView = lazy(() =>
+  import('./components/EmployerPortalView').then((m) => ({ default: m.EmployerPortalView })),
+);
+const AdminPortalView = lazy(() =>
+  import('./components/AdminPortalView').then((m) => ({ default: m.AdminPortalView })),
+);
+const PricingBillingView = lazy(() =>
+  import('./components/PricingBillingView').then((m) => ({ default: m.PricingBillingView })),
+);
+const AboutHelpCenterView = lazy(() =>
+  import('./components/AboutHelpCenterView').then((m) => ({ default: m.AboutHelpCenterView })),
+);
 import {
   CAREER_ROLES,
   LEARNING_CATALOG,
@@ -74,10 +110,18 @@ import {
   markNotificationRead,
   prependNotification,
 } from './utils/notifications';
+import {
+  CERT_EXPIRY_NOTIF_PREFIX,
+  buildCertExpiryNotificationId,
+  getAlertWorthyCertifications,
+  syncCertExpiryNotifications,
+} from './utils/certExpiry';
+import { inferLocationFromTimezone } from './utils/locationHelpers';
 import type { SearchEntry } from './utils/searchIndex';
 import type {
   AppNotification,
   AppSettings,
+  AptitudeAttemptRecord,
   CompanyJob,
   Difficulty,
   MultiAgentReport,
@@ -85,8 +129,36 @@ import type {
   NotificationCategory,
   SkillAuthenticityResult,
   ThemeMode,
+  UserLocation,
   UserProfile,
 } from './types';
+
+const PROFILE_SNAPSHOT_PREFIX = 'voragen-profile-';
+const USER_LOCATION_STORAGE_KEY = 'voragen-user-location';
+
+function saveLocalProfileSnapshot(key: string, nextProfile: UserProfile) {
+  if (!key || key === 'default' || !nextProfile.isSignedIn) return;
+  try {
+    localStorage.setItem(`${PROFILE_SNAPSHOT_PREFIX}${key}`, JSON.stringify(nextProfile));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+function loadLocalProfileSnapshot(key: string): UserProfile | null {
+  if (!key || key === 'default') return null;
+  try {
+    const raw = localStorage.getItem(`${PROFILE_SNAPSHOT_PREFIX}${key}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as UserProfile;
+    if (parsed && parsed.isSignedIn && typeof parsed.email === 'string' && parsed.email) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 const DEFAULT_SETTINGS: AppSettings = {
   remedialThresholdPct: 60,
@@ -131,9 +203,29 @@ export default function App() {
     if (!savedKey || savedKey === 'default') return '';
     return localStorage.getItem('pathforge-session-token') || '';
   });
-  const [profile, setProfile] = useState<UserProfile>(() =>
-    createBlankUnauthenticatedProfile(),
-  );
+  const [profile, setProfile] = useState<UserProfile>(() => {
+    const savedKey = localStorage.getItem('pathforge-user-key') || '';
+    const savedToken = localStorage.getItem('pathforge-session-token') || '';
+    if (savedKey && savedKey !== 'default' && savedToken) {
+      const snapshot = loadLocalProfileSnapshot(savedKey);
+      if (snapshot) return snapshot;
+    }
+    return createBlankUnauthenticatedProfile();
+  });
+  const [userLocation, setUserLocation] = useState<UserLocation>(() => {
+    try {
+      const saved = localStorage.getItem(USER_LOCATION_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as UserLocation;
+        if (typeof parsed.lat === 'number' && typeof parsed.lng === 'number' && parsed.city) {
+          return parsed;
+        }
+      }
+    } catch {
+      // Fallback to timezone
+    }
+    return inferLocationFromTimezone();
+  });
   const [agentReport, setAgentReport] = useState<MultiAgentReport | null>(null);
   const [isSyncingAI, setIsSyncingAI] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -144,6 +236,9 @@ export default function App() {
   const [skillAnalysisTarget, setSkillAnalysisTarget] = useState<string | undefined>(undefined);
   const [mapsQuotaExceeded, setMapsQuotaExceeded] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [cookieDismissed, setCookieDismissed] = useState<boolean>(
+    () => Boolean(localStorage.getItem('voragen-cookie-consent')),
+  );
 
   const initialQueryParams = useMemo(() => {
     if (typeof window === 'undefined') return { autostart: false, launch3d: false };
@@ -175,6 +270,20 @@ export default function App() {
     return [];
   });
 
+  const [dismissedCertAlertIds, setDismissedCertAlertIds] = useState<string[]>(() => {
+    if (!userKey) return [];
+    try {
+      const saved = localStorage.getItem(`voragen-dismissed-cert-alerts-${userKey}`);
+      if (saved) {
+        const parsed = JSON.parse(saved) as string[];
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      // Ignore storage errors
+    }
+    return [];
+  });
+
   useEffect(() => {
     if (!userKey) return;
     try {
@@ -183,6 +292,80 @@ export default function App() {
       // Ignore storage quota errors
     }
   }, [notifications, userKey]);
+
+  useEffect(() => {
+    if (!userKey) return;
+    try {
+      localStorage.setItem(
+        `voragen-dismissed-cert-alerts-${userKey}`,
+        JSON.stringify(dismissedCertAlertIds),
+      );
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, [dismissedCertAlertIds, userKey]);
+
+  const toastedCertAlertIdsRef = useRef<Set<string>>(new Set());
+
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((curr) => (curr === msg ? null : curr));
+    }, 4500);
+  }, []);
+
+  useEffect(() => {
+    if (!profile.isSignedIn) {
+      toastedCertAlertIdsRef.current.clear();
+      return;
+    }
+
+    const dismissedSet = new Set(dismissedCertAlertIds);
+    setNotifications((prev) => {
+      const { notifications: next } = syncCertExpiryNotifications(
+        prev,
+        profile.certifications,
+        dismissedSet,
+      );
+      if (
+        next.length === prev.length &&
+        next.every(
+          (n, idx) =>
+            n.id === prev[idx]?.id &&
+            n.detail === prev[idx]?.detail &&
+            n.read === prev[idx]?.read,
+        )
+      ) {
+        return prev;
+      }
+      return next;
+    });
+
+    const alertItems = getAlertWorthyCertifications(profile.certifications).filter(
+      ({ cert }) => !dismissedSet.has(buildCertExpiryNotificationId(cert)),
+    );
+    const activeIds = new Set(alertItems.map(({ cert }) => buildCertExpiryNotificationId(cert)));
+    for (const oldId of Array.from(toastedCertAlertIdsRef.current)) {
+      if (!activeIds.has(oldId)) {
+        toastedCertAlertIdsRef.current.delete(oldId);
+      }
+    }
+
+    const unnotified = alertItems.filter(
+      ({ cert }) => !toastedCertAlertIdsRef.current.has(buildCertExpiryNotificationId(cert)),
+    );
+    if (unnotified.length > 0) {
+      for (const { cert } of unnotified) {
+        toastedCertAlertIdsRef.current.add(buildCertExpiryNotificationId(cert));
+      }
+      const first = unnotified[0];
+      showToast(
+        unnotified.length === 1
+          ? `Certificate alert: "${first.cert.title}" ${first.evaluation.label.toLowerCase()} (${first.cert.expiryDate}).`
+          : `Certificate alert: ${unnotified.length} certifications require renewal within 30 days.`,
+      );
+    }
+  }, [profile.isSignedIn, profile.certifications, dismissedCertAlertIds, showToast]);
 
   const autoSyncAgentsRef = useRef(settings.autoSyncAgents);
   useEffect(() => {
@@ -285,25 +468,70 @@ export default function App() {
       return;
     }
 
+    const localSnap = loadLocalProfileSnapshot(userKey);
+    if (localSnap) {
+      setProfile(localSnap);
+      if (localSnap.locationCoords) {
+        setUserLocation(localSnap.locationCoords);
+      }
+    }
+
     let cancelled = false;
     fetch(`/api/profile?key=${encodeURIComponent(userKey)}`, {
       headers: { 'x-voragen-token': sessionToken },
     })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: UserProfile | null) => {
+      .then(async (res) => {
         if (cancelled) return;
-        if (data && data.isSignedIn && typeof data.email === 'string' && data.email) {
-          setProfile(data);
-          setNotifications((prev) => {
-            if (prev.length > 0) return prev;
-            const roleTitle =
-              CAREER_ROLES.find((r) => r.id === data.targetCareerId)?.title ?? CAREER_ROLES[0].title;
-            return buildInitialNotifications(data.name || 'Learner', roleTitle);
-          });
-          if (autoSyncAgentsRef.current) {
-            runMultiAgentCollaboration(data, 'Restored User Session Diagnostics');
+        if (res.status === 401) {
+          localStorage.removeItem('pathforge-user-key');
+          localStorage.removeItem('pathforge-session-token');
+          localStorage.removeItem(`${PROFILE_SNAPSHOT_PREFIX}${userKey}`);
+          setUserKey('');
+          setSessionToken('');
+          setProfile(createBlankUnauthenticatedProfile());
+          return;
+        }
+        if (res.ok) {
+          const data = (await res.json()) as UserProfile | null;
+          if (cancelled) return;
+          if (data && data.isSignedIn && typeof data.email === 'string' && data.email) {
+            setProfile(data);
+            saveLocalProfileSnapshot(userKey, data);
+            if (data.locationCoords) {
+              setUserLocation(data.locationCoords);
+              try {
+                localStorage.setItem(USER_LOCATION_STORAGE_KEY, JSON.stringify(data.locationCoords));
+              } catch {
+                // Ignore storage quota errors
+              }
+            }
+            setNotifications((prev) => {
+              if (prev.length > 0) return prev;
+              const roleTitle =
+                CAREER_ROLES.find((r) => r.id === data.targetCareerId)?.title ?? CAREER_ROLES[0].title;
+              return buildInitialNotifications(data.name || 'Learner', roleTitle);
+            });
+            if (autoSyncAgentsRef.current) {
+              runMultiAgentCollaboration(data, 'Restored User Session Diagnostics');
+            }
+            return;
           }
-        } else {
+        }
+        // Server store restarted (404) or transient error: preserve cached local snapshot and re-seed server
+        if (localSnap) {
+          fetch(`/api/profile?key=${encodeURIComponent(userKey)}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-voragen-token': sessionToken,
+            },
+            body: JSON.stringify(localSnap),
+            keepalive: true,
+          }).catch(() => {});
+          if (autoSyncAgentsRef.current) {
+            runMultiAgentCollaboration(localSnap, 'Restored User Session Diagnostics');
+          }
+        } else if (res.status === 404) {
           localStorage.removeItem('pathforge-user-key');
           localStorage.removeItem('pathforge-session-token');
           setUserKey('');
@@ -313,24 +541,19 @@ export default function App() {
       })
       .catch(() => {
         if (cancelled) return;
-        localStorage.removeItem('pathforge-user-key');
-        localStorage.removeItem('pathforge-session-token');
-        setUserKey('');
-        setSessionToken('');
-        setProfile(createBlankUnauthenticatedProfile());
+        if (!localSnap) {
+          localStorage.removeItem('pathforge-user-key');
+          localStorage.removeItem('pathforge-session-token');
+          setUserKey('');
+          setSessionToken('');
+          setProfile(createBlankUnauthenticatedProfile());
+        }
       });
 
     return () => {
       cancelled = true;
     };
   }, [userKey, sessionToken, runMultiAgentCollaboration]);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((curr) => (curr === msg ? null : curr));
-    }, 4500);
-  };
 
   const requireSignInForUpdate = (actionLabel = 'update your personal details'): boolean => {
     if (profile.isSignedIn) return true;
@@ -353,6 +576,7 @@ export default function App() {
     const activeToken = explicitToken || sessionToken;
     if (!activeKey || activeKey === 'default') return;
     setProfile(next);
+    saveLocalProfileSnapshot(activeKey, next);
     fetch(`/api/profile?key=${encodeURIComponent(activeKey)}`, {
       method: 'PUT',
       headers: {
@@ -360,6 +584,7 @@ export default function App() {
         ...(activeToken ? { 'x-voragen-token': activeToken } : {}),
       },
       body: JSON.stringify(next),
+      keepalive: true,
     }).catch(() => {
       // Non-fatal
     });
@@ -640,6 +865,29 @@ export default function App() {
     });
   };
 
+  const handleToggleSaveJob = (companyId: string) => {
+    if (!requireSignInForUpdate('save a job bookmark')) return;
+    const current = profile.savedJobIds || [];
+    const exists = current.includes(companyId);
+    const nextSaved = exists ? current.filter((id) => id !== companyId) : [companyId, ...current];
+    persistProfile({ ...profile, savedJobIds: nextSaved });
+    showToast(exists ? 'Removed from Saved Jobs.' : 'Saved to My Applications & Drives.');
+  };
+
+  const handleRecordAptitudeAttempt = (attempt: AptitudeAttemptRecord) => {
+    if (!profile.isSignedIn) return;
+    persistProfile({
+      ...profile,
+      aptitudeHistory: [attempt, ...(profile.aptitudeHistory || [])],
+    });
+    pushNotification({
+      title: `${attempt.category}: ${attempt.scorePct}%`,
+      detail: `Completed ${attempt.difficulty} exam (${attempt.date}).`,
+      category: 'skill',
+      targetSection: 'skill-analysis',
+    });
+  };
+
   const handleResetDemo = () => {
     if (!userKey) return;
     fetch(`/api/profile/reset?key=${encodeURIComponent(userKey)}`, {
@@ -659,6 +907,7 @@ export default function App() {
             needsOnboarding: false,
           } satisfies UserProfile);
         setProfile(resetProf);
+        saveLocalProfileSnapshot(userKey, resetProf);
         setNotifications(buildInitialNotifications(resetProf.name, CAREER_ROLES[0].title));
         runMultiAgentCollaboration(resetProf, 'Workspace Cleared');
         showToast('Workspace cleared back to a clean personal slate.');
@@ -673,6 +922,7 @@ export default function App() {
           needsOnboarding: false,
         };
         setProfile(resetProf);
+        saveLocalProfileSnapshot(userKey, resetProf);
       });
   };
 
@@ -682,10 +932,27 @@ export default function App() {
       localStorage.setItem('pathforge-session-token', nextToken);
       setSessionToken(nextToken);
     }
+    saveLocalProfileSnapshot(nextKey, nextProfile);
+    if (nextProfile.locationCoords) {
+      setUserLocation(nextProfile.locationCoords);
+      try {
+        localStorage.setItem(USER_LOCATION_STORAGE_KEY, JSON.stringify(nextProfile.locationCoords));
+      } catch {
+        // Ignore storage quota errors
+      }
+    }
     setUserKey(nextKey);
     setProfile(nextProfile);
     setAuthModalOpen(false);
     setAuthModalReason(undefined);
+    toastedCertAlertIdsRef.current.clear();
+    try {
+      const savedDismissed = localStorage.getItem(`voragen-dismissed-cert-alerts-${nextKey}`);
+      const parsedDismissed = savedDismissed ? (JSON.parse(savedDismissed) as string[]) : [];
+      setDismissedCertAlertIds(Array.isArray(parsedDismissed) ? parsedDismissed : []);
+    } catch {
+      setDismissedCertAlertIds([]);
+    }
     const activeRole =
       CAREER_ROLES.find((r) => r.id === nextProfile.targetCareerId) ?? CAREER_ROLES[0];
     setNotifications(buildInitialNotifications(nextProfile.name, activeRole.title));
@@ -727,17 +994,76 @@ export default function App() {
     runMultiAgentCollaboration(updated, 'New Account Workspace Ready');
   };
 
+  const handleUpdateLocation = (nextLocation: UserLocation) => {
+    setUserLocation(nextLocation);
+    try {
+      localStorage.setItem(USER_LOCATION_STORAGE_KEY, JSON.stringify(nextLocation));
+    } catch {
+      // Ignore storage quota errors
+    }
+    if (profile.isSignedIn) {
+      persistProfile({
+        ...profile,
+        location: `${nextLocation.city}, ${nextLocation.country}`,
+        locationCoords: nextLocation,
+      });
+    }
+    showToast(`Location updated to ${nextLocation.city}, ${nextLocation.country}.`);
+  };
+
+  const clearClientSessionState = useCallback(
+    (previousKey: string) => {
+      signOutFirebase().catch(() => {});
+      if (previousKey) {
+        localStorage.removeItem(`${PROFILE_SNAPSHOT_PREFIX}${previousKey}`);
+        localStorage.removeItem(`pathforge-notifications-${previousKey}`);
+        localStorage.removeItem(`voragen-dismissed-cert-alerts-${previousKey}`);
+      }
+      localStorage.removeItem('pathforge-user-key');
+      localStorage.removeItem('pathforge-session-token');
+      setUserKey('');
+      setSessionToken('');
+      setProfile(createBlankUnauthenticatedProfile());
+      setAgentReport(null);
+      setNotifications([]);
+      setDismissedCertAlertIds([]);
+      toastedCertAlertIdsRef.current.clear();
+      setShow3DGame(false);
+    },
+    [],
+  );
+
   const handleSignOut = () => {
-    signOutFirebase().catch(() => {});
-    localStorage.removeItem('pathforge-user-key');
-    localStorage.removeItem('pathforge-session-token');
-    setUserKey('');
-    setSessionToken('');
-    setProfile(createBlankUnauthenticatedProfile());
-    setAgentReport(null);
-    setNotifications([]);
-    setShow3DGame(false);
+    const activeKey = userKey;
+    const activeToken = sessionToken;
+    if (activeKey && activeToken) {
+      fetch(`/api/auth/logout?key=${encodeURIComponent(activeKey)}`, {
+        method: 'POST',
+        headers: { 'x-voragen-token': activeToken },
+        keepalive: true,
+      }).catch(() => {});
+    }
+    clearClientSessionState(activeKey);
     showToast('Signed out cleanly. Viewing public mode with zero saved user data.');
+  };
+
+  const handleProfilePatched = (next: UserProfile) => {
+    setProfile(next);
+    if (userKey && next.isSignedIn) {
+      saveLocalProfileSnapshot(userKey, next);
+    }
+    showToast('Account security settings updated.');
+  };
+
+  const handleAccountDeleted = () => {
+    clearClientSessionState(userKey);
+    setActiveSection('home');
+    showToast('Account and saved workspace data were permanently deleted.');
+  };
+
+  const handleSessionRevoked = () => {
+    clearClientSessionState(userKey);
+    showToast('Session ended — please sign in again.');
   };
 
   const handleVerifySkillAuthenticity = (result: SkillAuthenticityResult) => {
@@ -944,7 +1270,18 @@ export default function App() {
           onMarkAllNotificationsRead={() =>
             setNotifications((prev) => markAllNotificationsRead(prev))
           }
-          onClearNotifications={() => setNotifications([])}
+          onClearNotifications={() => {
+            const clearedCertIds = notifications
+              .filter((n) => n.id.startsWith(CERT_EXPIRY_NOTIF_PREFIX))
+              .map((n) => n.id);
+            if (clearedCertIds.length > 0) {
+              setDismissedCertAlertIds((prev) =>
+                Array.from(new Set([...prev, ...clearedCertIds])),
+              );
+            }
+            setNotifications([]);
+          }}
+          onOpenNotificationsCenter={() => handleSidebarSelectSection('notifications-center')}
           onOpenSettings={() => handleSidebarSelectSection('settings')}
           onOpenAuthModal={() => {
             setAuthModalReason(undefined);
@@ -1001,7 +1338,11 @@ export default function App() {
                   profile={profile}
                   roles={CAREER_ROLES}
                   match={match}
+                  sessionToken={sessionToken}
                   onUpdateProfile={(next) => persistProfile(next)}
+                  onProfilePatched={handleProfilePatched}
+                  onAccountDeleted={handleAccountDeleted}
+                  onSessionRevoked={handleSessionRevoked}
                   onSignOut={handleSignOut}
                   onResetDemo={handleResetDemo}
                   onVerifySkill={(skillName) => openAuthenticityForSkill(skillName)}
@@ -1042,6 +1383,9 @@ export default function App() {
                   onRunMultiAgentSync={(reason) => runMultiAgentCollaboration(profile, reason)}
                   onSubmitAssessment={handleAssessmentSubmit}
                   onVerifySkillAuthenticity={handleVerifySkillAuthenticity}
+                  onRecordAptitudeAttempt={handleRecordAptitudeAttempt}
+                  onSelectCareerGoal={handleSelectCareerGoal}
+                  onOpenCoursesHub={() => handleSidebarSelectSection('courses')}
                   initialSkill={skillAnalysisTarget}
                   initialMode={skillAnalysisMode}
                 />
@@ -1064,6 +1408,38 @@ export default function App() {
                   targetRole={targetRole}
                   roadmap={adaptiveRoadmap}
                   onToggleCompleteModule={handleToggleCompleteModule}
+                  onOpenCoursesHub={() => handleSidebarSelectSection('courses')}
+                />
+              )}
+
+              {activeSection === 'courses' && (
+                <CoursesHubView
+                  profile={profile}
+                  targetRole={targetRole}
+                  dailyStudyMinutes={settings.dailyStudyMinutes}
+                  onUpdateProfile={(next) => persistProfile(next)}
+                  onRequireAuth={requireSignInForUpdate}
+                  onNavigateRoadmap={() => handleSidebarSelectSection('learning-recommendations')}
+                  initialCourseId={searchSubTarget}
+                />
+              )}
+
+              {activeSection === 'projects' && (
+                <ProjectsView
+                  profile={profile}
+                  sessionToken={sessionToken}
+                  onUpdateProfile={(next) => persistProfile(next)}
+                  onRequireAuth={requireSignInForUpdate}
+                />
+              )}
+
+              {activeSection === 'certifications' && (
+                <CertificationsPassportView
+                  profile={profile}
+                  readinessPct={match.overallReadinessPct}
+                  sessionToken={sessionToken}
+                  onUpdateProfile={(next) => persistProfile(next)}
+                  onRequireAuth={requireSignInForUpdate}
                 />
               )}
 
@@ -1116,8 +1492,74 @@ export default function App() {
                 <GlobalJobsView
                   profile={profile}
                   readinessPct={match.overallReadinessPct}
+                  targetRole={targetRole}
+                  sessionToken={sessionToken}
+                  userLocation={userLocation}
+                  onChangeLocation={handleUpdateLocation}
                   onApplyForJob={handleApplyForJob}
+                  onToggleSaveJob={handleToggleSaveJob}
+                  onRequireAuth={requireSignInForUpdate}
                   initialCompanyId={searchSubTarget}
+                />
+              )}
+
+              {activeSection === 'applications' && (
+                <ApplicationsDrivesView
+                  profile={profile}
+                  onUpdateProfile={(next) => persistProfile(next)}
+                  onRequireAuth={requireSignInForUpdate}
+                  onNavigateJobs={() => handleSidebarSelectSection('global-jobs')}
+                />
+              )}
+
+              {activeSection === 'community' && (
+                <CommunityMentorsView
+                  profile={profile}
+                  sessionToken={sessionToken}
+                  onRequireAuth={requireSignInForUpdate}
+                />
+              )}
+
+              {activeSection === 'notifications-center' && (
+                <NotificationsCenterView
+                  profile={profile}
+                  sessionToken={sessionToken}
+                  notifications={notifications}
+                  onMarkAllRead={() => setNotifications((prev) => markAllNotificationsRead(prev))}
+                  onUpdateProfile={(next) => persistProfile(next)}
+                  onRequireAuth={requireSignInForUpdate}
+                />
+              )}
+
+              {activeSection === 'employer-portal' && (
+                <EmployerPortalView
+                  profile={profile}
+                  sessionToken={sessionToken}
+                  onRequireAuth={requireSignInForUpdate}
+                />
+              )}
+
+              {activeSection === 'admin-portal' && (
+                <AdminPortalView
+                  sessionToken={sessionToken}
+                  onRequireAuth={requireSignInForUpdate}
+                />
+              )}
+
+              {activeSection === 'pricing' && (
+                <PricingBillingView
+                  profile={profile}
+                  sessionToken={sessionToken}
+                  onUpdateProfile={(next) => persistProfile(next)}
+                  onRequireAuth={requireSignInForUpdate}
+                />
+              )}
+
+              {activeSection === 'help-center' && (
+                <AboutHelpCenterView
+                  profile={profile}
+                  sessionToken={sessionToken}
+                  onUpdateProfile={(next) => persistProfile(next)}
                 />
               )}
 
@@ -1134,6 +1576,47 @@ export default function App() {
               )}
             </Suspense>
           </ErrorBoundary>
+
+          {!cookieDismissed && !profile.cookieConsent && (
+            <div className="no-print mt-8 rounded-xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#0A1628] px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <span className="text-slate-700 dark:text-slate-300">
+                VoraGen uses essential session storage plus optional learning analytics cookies. Manage anytime in Help Center.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.setItem('voragen-cookie-consent', 'essential');
+                    setCookieDismissed(true);
+                  }}
+                  className="px-3 py-1 rounded-md border border-slate-300 dark:border-[#1E3A5F]/70 text-slate-700 dark:text-slate-200 font-medium"
+                >
+                  Essential Only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.setItem('voragen-cookie-consent', 'all');
+                    setCookieDismissed(true);
+                    if (profile.isSignedIn) {
+                      persistProfile({
+                        ...profile,
+                        cookieConsent: {
+                          essential: true,
+                          analytics: true,
+                          personalization: true,
+                          updatedAt: new Date().toISOString().split('T')[0],
+                        },
+                      });
+                    }
+                  }}
+                  className="px-3 py-1 rounded-md bg-[#0B2545] text-white dark:bg-[#1D4ED8] font-semibold"
+                >
+                  Accept All
+                </button>
+              </div>
+            </div>
+          )}
         </main>
       </div>
 
