@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { searchPlatformOptions, type SearchEntry } from '../utils/searchIndex';
 import { countUnreadNotifications, formatRelativeTime } from '../utils/notifications';
+import { Logo } from './Logo';
 import type { AppNotification, NavSection, NotificationCategory } from '../types';
 
 interface TopSearchBarProps {
@@ -132,17 +133,20 @@ export function TopSearchBar({
     dropdownOpen && matches[highlightedIdx] ? `search-opt-${matches[highlightedIdx].id}` : undefined;
 
   return (
-    <header className="no-print sticky top-0 z-20 border-b border-slate-200 dark:border-white/10 bg-white/95 dark:bg-[#07090F]/95 backdrop-blur-xs">
+    <header className="no-print sticky top-0 z-20 border-b border-slate-200 dark:border-[#1E3A5F]/60 bg-white/95 dark:bg-[#05070B]/95 backdrop-blur-xs">
       <div className="max-w-[1240px] mx-auto px-4 sm:px-8 lg:px-10 py-3 flex items-center justify-between gap-3">
-        {/* Mobile Sidebar Drawer Button */}
-        <button
-          type="button"
-          onClick={onOpenMobileMenu}
-          aria-label="Open navigation menu"
-          className="lg:hidden p-2 rounded-lg border border-slate-200 dark:border-white/15 text-slate-800 dark:text-white shrink-0"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+        {/* Top-Left Mobile Logo + Drawer Trigger */}
+        <div className="flex items-center gap-2 lg:hidden shrink-0">
+          <button
+            type="button"
+            onClick={onOpenMobileMenu}
+            aria-label="Open navigation menu"
+            className="p-2 rounded-lg border border-slate-200 dark:border-[#1E3A5F]/70 text-[#0B2545] dark:text-white shrink-0"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <Logo className="w-8 h-8 shrink-0" />
+        </div>
 
         {/* Global Instant Search Input + Autocomplete Results */}
         <div ref={containerRef} className="relative flex-1 max-w-2xl">
@@ -168,7 +172,7 @@ export function TopSearchBar({
               aria-expanded={dropdownOpen}
               aria-controls="global-search-results"
               aria-activedescendant={activeOptionId}
-              className="w-full pl-10 pr-9 py-2 rounded-xl border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#0E131F] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-600 dark:focus:ring-blue-500"
+              className="w-full pl-10 pr-9 py-2 rounded-xl border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#0A1628] text-sm text-[#0B2545] dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0B2545] dark:focus:ring-amber-400"
             />
             {query && (
               <button
@@ -178,7 +182,7 @@ export function TopSearchBar({
                   setHighlightedIdx(0);
                 }}
                 aria-label="Clear search"
-                className="absolute right-2.5 p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                className="absolute right-2.5 p-1 text-slate-400 hover:text-[#0B2545] dark:hover:text-white"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -186,7 +190,7 @@ export function TopSearchBar({
           </div>
 
           {dropdownOpen && (
-            <div className="absolute left-0 right-0 mt-2 rounded-xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#0E131F] shadow-xl overflow-hidden max-h-[380px] overflow-y-auto z-50">
+            <div className="absolute left-0 right-0 mt-2 rounded-xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] shadow-xl overflow-hidden max-h-[380px] overflow-y-auto z-50">
               <div className="px-3.5 py-2 border-b border-slate-100 dark:border-white/10 text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center justify-between">
                 <span>
                   {query.trim()
@@ -220,16 +224,16 @@ export function TopSearchBar({
                         onClick={() => chooseEntry(entry)}
                         className={`w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 transition-colors ${
                           isHighlighted
-                            ? 'bg-red-50/80 dark:bg-blue-500/15'
+                            ? 'bg-[#0B2545]/8 dark:bg-[#1D4ED8]/20'
                             : 'hover:bg-slate-50 dark:hover:bg-white/5'
                         }`}
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-slate-950 dark:text-white truncate">
+                            <span className="text-sm font-semibold text-[#0B2545] dark:text-white truncate">
                               {entry.label}
                             </span>
-                            <span className="text-[11px] font-medium text-red-700 dark:text-amber-400 shrink-0">
+                            <span className="text-[11px] font-medium text-emerald-700 dark:text-amber-400 shrink-0">
                               {entry.category}
                             </span>
                           </div>
@@ -268,15 +272,15 @@ export function TopSearchBar({
               aria-haspopup="true"
               className={`relative p-2 rounded-xl border transition-colors ${
                 notifOpen
-                  ? 'bg-red-600 text-white border-red-600 dark:bg-blue-600 dark:border-blue-500'
-                  : 'border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#0E131F] text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-white/5'
+                  ? 'bg-[#0B2545] text-white border-[#0B2545] dark:bg-[#1D4ED8] dark:border-[#2563EB]'
+                  : 'border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#0A1628] text-[#0B2545] dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-white/5'
               }`}
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
                 <span
                   data-testid="unread-notifications-badge"
-                  className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 dark:bg-pink-500 text-white text-[10px] font-mono font-bold tabular-nums flex items-center justify-center border border-white dark:border-[#07090F]"
+                  className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 dark:bg-amber-400 text-slate-950 text-[10px] font-mono font-bold tabular-nums flex items-center justify-center border border-white dark:border-[#05070B]"
                 >
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
@@ -287,11 +291,11 @@ export function TopSearchBar({
               <div
                 role="region"
                 aria-label="Platform notifications"
-                className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#0E131F] shadow-2xl overflow-hidden z-50"
+                className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] shadow-2xl overflow-hidden z-50"
               >
                 <div className="px-4 py-3 border-b border-slate-200 dark:border-white/10 flex items-center justify-between gap-2">
                   <div>
-                    <h2 className="font-display text-sm font-bold text-slate-950 dark:text-white">
+                    <h2 className="font-display text-sm font-bold text-[#0B2545] dark:text-white">
                       Live Platform Updates
                     </h2>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -317,7 +321,7 @@ export function TopSearchBar({
                         type="button"
                         onClick={onClearNotifications}
                         aria-label="Clear notifications"
-                        className="p-1.5 rounded-md text-slate-400 hover:text-red-600 dark:hover:text-pink-400 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                        className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -350,15 +354,15 @@ export function TopSearchBar({
                           className={`w-full text-left px-4 py-3 flex items-start gap-3 transition-colors ${
                             item.read
                               ? 'hover:bg-slate-50 dark:hover:bg-white/5 opacity-80'
-                              : 'bg-red-50/40 dark:bg-blue-500/10 hover:bg-red-50/70 dark:hover:bg-blue-500/15'
+                              : 'bg-[#0B2545]/5 dark:bg-[#1D4ED8]/15 hover:bg-[#0B2545]/10 dark:hover:bg-[#1D4ED8]/20'
                           }`}
                         >
-                          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-[#141B2D] border border-slate-200 dark:border-white/10 flex items-center justify-center shrink-0 mt-0.5 text-red-600 dark:text-amber-400">
+                          <div className="w-8 h-8 rounded-lg bg-[#F4F7FB] dark:bg-[#0F213E] border border-slate-200 dark:border-white/10 flex items-center justify-center shrink-0 mt-0.5 text-[#0B2545] dark:text-amber-400">
                             <CatIcon className="w-4 h-4" />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-semibold text-slate-950 dark:text-white truncate">
+                              <span className="text-xs font-semibold text-[#0B2545] dark:text-white truncate">
                                 {item.title}
                               </span>
                               <span className="text-[10px] font-mono text-slate-400 shrink-0">
@@ -372,7 +376,7 @@ export function TopSearchBar({
                           {!item.read && (
                             <span
                               aria-label="Unread update"
-                              className="w-2 h-2 rounded-full bg-red-600 dark:bg-pink-400 shrink-0 mt-2"
+                              className="w-2 h-2 rounded-full bg-emerald-600 dark:bg-amber-400 shrink-0 mt-2"
                             />
                           )}
                         </button>
@@ -391,7 +395,7 @@ export function TopSearchBar({
                 setNotifOpen(false);
                 onOpenAuthModal();
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors whitespace-nowrap"
             >
               <LogIn className="w-3.5 h-3.5" />
               <span>Sign In</span>
@@ -407,8 +411,8 @@ export function TopSearchBar({
             aria-label="Open Settings"
             className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-colors whitespace-nowrap ${
               activeSection === 'settings'
-                ? 'bg-red-600 text-white border-red-600 dark:bg-blue-600 dark:border-blue-500'
-                : 'border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#0E131F] text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-white/5'
+                ? 'bg-[#0B2545] text-white border-[#0B2545] dark:bg-[#1D4ED8] dark:border-[#2563EB]'
+                : 'border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#0A1628] text-[#0B2545] dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-white/5'
             }`}
           >
             <Settings className="w-4 h-4" />

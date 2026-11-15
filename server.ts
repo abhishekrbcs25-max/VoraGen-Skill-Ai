@@ -47,7 +47,16 @@ import {
 } from './src/db/users.ts';
 import type { AIVideoLesson, InterviewEvaluation, MultiAgentReport, UserProfile } from './src/types';
 
-const PORT = Number(process.env.PORT || 3000);
+function resolveServerPort(): number {
+  const portFlagIdx = process.argv.indexOf('--port');
+  if (portFlagIdx !== -1 && process.argv[portFlagIdx + 1]) {
+    const cliPort = Number(process.argv[portFlagIdx + 1]);
+    if (Number.isFinite(cliPort) && cliPort > 0) return cliPort;
+  }
+  return Number(process.env.PORT || 3000);
+}
+
+const PORT = resolveServerPort();
 const DATA_DIR = path.resolve(process.cwd(), '.pathforge-data');
 const PROFILE_FILE = path.join(DATA_DIR, 'profiles.json');
 const CREDENTIALS_FILE = path.join(DATA_DIR, 'credentials.json');
@@ -171,6 +180,17 @@ export interface CreateApiAppOptions {
   credentialsStore?: Record<string, string>;
   persistStores?: boolean;
   verifyIdTokenFn?: (idToken: string) => Promise<{ email?: string; email_verified?: boolean }>;
+  requireAuthMiddleware?: express.RequestHandler;
+  authLimiter?: SlidingWindowRateLimiter;
+  aiLimiter?: SlidingWindowRateLimiter;
+  aiClientFactory?: () => GoogleGenAI | null;
+  sqlHandlers?: {
+    getOrCreateUser: typeof getOrCreateUser;
+    updateUserCareerSnapshot: typeof updateUserCareerSnapshot;
+    getUserDashboardRecords: typeof getUserDashboardRecords;
+    recordSqlAssessment: typeof recordSqlAssessment;
+    recordSqlAiSession: typeof recordSqlAiSession;
+  };
 }
 
 export function createApiApp(options: CreateApiAppOptions = {}) {
@@ -193,10 +213,13 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
     next();
   });
 
+  const activeAuthLimiter = options.authLimiter ?? authLimiter;
+  const activeAiLimiter = options.aiLimiter ?? aiLimiter;
+
   // Rate limit auth and AI endpoints against abuse
   app.use('/api/auth', (req, res, next) => {
     const ip = req.ip || 'unknown';
-    if (!authLimiter.allow(ip)) {
+    if (!activeAuthLimiter.allow(ip)) {
       res.status(429).json({ error: 'Too many authentication attempts. Please wait a minute.' });
       return;
     }
@@ -205,7 +228,7 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
 
   app.use('/api/ai', (req, res, next) => {
     const ip = req.ip || 'unknown';
-    if (!aiLimiter.allow(ip)) {
+    if (!activeAiLimiter.allow(ip)) {
       res.status(429).json({ error: 'AI rate limit reached. Please retry in a moment.' });
       return;
     }
@@ -217,6 +240,15 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
   const credentialsStore = options.credentialsStore ?? ensureCredentialsStore();
   const verifyIdTokenFn =
     options.verifyIdTokenFn ?? ((token: string) => adminAuth.verifyIdToken(token));
+  const authMiddleware = options.requireAuthMiddleware ?? requireAuth;
+  const resolveAiClient = options.aiClientFactory ?? getGeminiClient;
+  const sql = options.sqlHandlers ?? {
+    getOrCreateUser,
+    updateUserCareerSnapshot,
+    getUserDashboardRecords,
+    recordSqlAssessment,
+    recordSqlAiSession,
+  };
 
   const persistProfileStore = () => {
     if (shouldPersist) saveDataStore(profileStore);
@@ -446,19 +478,19 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
   });
 
   // Cloud SQL Authenticated Learner Snapshot & Progress Endpoints
-  app.get('/api/sql/profile', requireAuth, async (req: AuthRequest, res) => {
+  app.get('/api/sql/profile', authMiddleware, async (req: AuthRequest, res) => {
     try {
       const uid = req.user!.uid;
       const email = req.user!.email || `${uid}@pathforge.local`;
-      await getOrCreateUser(uid, email, req.user!.name || null);
-      const dashboard = await getUserDashboardRecords(uid);
+      await sql.getOrCreateUser(uid, email, req.user!.name || null);
+      const dashboard = await sql.getUserDashboardRecords(uid);
       res.json({ ok: true, dashboard });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
   });
 
-  app.put('/api/sql/profile', requireAuth, async (req: AuthRequest, res) => {
+  app.put('/api/sql/profile', authMiddleware, async (req: AuthRequest, res) => {
     try {
       const uid = req.user!.uid;
       const email = req.user!.email || `${uid}@pathforge.local`;
@@ -468,8 +500,8 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
         streakPoints?: number;
         streakDays?: number;
       };
-      await getOrCreateUser(uid, email, body.displayName || req.user!.name || null);
-      const updated = await updateUserCareerSnapshot(uid, {
+      await sql.getOrCreateUser(uid, email, body.displayName || req.user!.name || null);
+      const updated = await sql.updateUserCareerSnapshot(uid, {
         displayName: body.displayName,
         targetCareerId: body.targetCareerId,
         streakPoints: body.streakPoints,
@@ -481,7 +513,7 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
     }
   });
 
-  app.post('/api/sql/assessments', requireAuth, async (req: AuthRequest, res) => {
+  app.post('/api/sql/assessments', authMiddleware, async (req: AuthRequest, res) => {
     try {
       const uid = req.user!.uid;
       const email = req.user!.email || `${uid}@pathforge.local`;
@@ -495,7 +527,7 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
         res.status(400).json({ error: 'skillName and numeric scorePct are required' });
         return;
       }
-      const created = await recordSqlAssessment(uid, email, {
+      const created = await sql.recordSqlAssessment(uid, email, {
         skillName,
         scorePct,
         remedialTriggered: Boolean(remedialTriggered),
@@ -543,7 +575,7 @@ Missing skills: ${match.missingSkillNames.join(', ') || 'None'}.`
 }
 Give clear, accurate, actionable guidance with code examples or concrete study steps when relevant.`;
 
-    const ai = getGeminiClient();
+    const ai = resolveAiClient();
     const activeModel = ai ? modelCooldowns.pickAvailableModel(selectedModel) : null;
     if (ai && activeModel) {
       const resolvedActiveThinking = normalizeThinkingLevel(activeModel, thinkingLevel);
@@ -619,7 +651,7 @@ Give clear, accurate, actionable guidance with code examples or concrete study s
     if (useMaps) tools.push({ type: 'google_maps' });
     if (tools.length === 0) tools.push({ type: 'google_search' });
 
-    const ai = getGeminiClient();
+    const ai = resolveAiClient();
     const searchModel = ai ? modelCooldowns.pickAvailableModel('gemini-4-hydrogen') : null;
     if (ai && searchModel) {
       try {
@@ -705,7 +737,7 @@ Give clear, accurate, actionable guidance with code examples or concrete study s
       return;
     }
 
-    const ai = getGeminiClient();
+    const ai = resolveAiClient();
     if (ai && modelCooldowns.isAvailable('gemini-3.5-transcribe')) {
       try {
         const interaction = await withTimeout(
@@ -766,7 +798,7 @@ Give clear, accurate, actionable guidance with code examples or concrete study s
       return;
     }
 
-    const ai = getGeminiClient();
+    const ai = resolveAiClient();
     const evalModel = ai ? modelCooldowns.pickAvailableModel('gemini-4-hydrogen') : null;
     if (ai && evalModel) {
       try {
@@ -868,7 +900,7 @@ Score 0-100, list 2 concrete strengths, 2 concrete improvements, and 2-sentence 
     }
 
     const lowAssessments = profile.assessments.filter((a) => a.scorePct < 60);
-    const ai = getGeminiClient();
+    const ai = resolveAiClient();
     const isInitialStartupSync = triggerReason === 'Initial Student Profile Diagnostics';
     const selectedModel =
       ai && !isInitialStartupSync ? modelCooldowns.pickAvailableModel('gemini-4-hydrogen') : null;
@@ -1060,7 +1092,7 @@ Produce concise, grounded outputs from the 4 collaborating agents:
       profile.projects,
     );
 
-    const ai = getGeminiClient();
+    const ai = resolveAiClient();
     const mentorModel = ai ? modelCooldowns.pickAvailableModel('gemini-4-hydrogen') : null;
     if (ai && mentorModel) {
       const recentHistory = (history || [])
@@ -1125,7 +1157,7 @@ Give practical, encouraging, technically accurate advice in 3-5 concise sentence
     }
 
     const mentor = MENTOR_STAFF.find((m) => m.id === mentorId) ?? MENTOR_STAFF[0];
-    const ai = getGeminiClient();
+    const ai = resolveAiClient();
     const videoModel = ai ? modelCooldowns.pickAvailableModel('gemini-4-hydrogen') : null;
 
     if (ai && videoModel) {
@@ -1243,7 +1275,7 @@ Give practical, encouraging, technically accurate advice in 3-5 concise sentence
   });
 
   // Optional SQL AI session logger helper (best-effort)
-  app.post('/api/sql/ai-session', requireAuth, async (req: AuthRequest, res) => {
+  app.post('/api/sql/ai-session', authMiddleware, async (req: AuthRequest, res) => {
     try {
       const uid = req.user!.uid;
       const email = req.user!.email || `${uid}@pathforge.local`;
@@ -1252,7 +1284,7 @@ Give practical, encouraging, technically accurate advice in 3-5 concise sentence
         model?: string;
         promptSummary?: string;
       };
-      const created = await recordSqlAiSession(uid, email, {
+      const created = await sql.recordSqlAiSession(uid, email, {
         mode: mode || 'chat',
         model: model || 'gemini-4-hydrogen',
         promptSummary: promptSummary || 'Study session',
@@ -1428,13 +1460,27 @@ async function startServer() {
     next();
   });
 
-  // Vite dev middleware or static prod build
+  // Bind port 3000 immediately so healthchecks succeed while Vite warms up asynchronously
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: false },
+    process.env.DISABLE_HMR ??= 'true';
+    const viteMiddlewarePromise = createViteServer({
+      server: { middlewareMode: true, hmr: false, ws: false },
       appType: 'spa',
+    }).then((vite) => vite.middlewares);
+
+    viteMiddlewarePromise.catch((err) => {
+      console.error('Failed to initialize Vite dev middleware:', err);
     });
-    app.use(vite.middlewares);
+
+    app.use((req, res, next) => {
+      if (req.path.startsWith('/api/') || req.path === '/api') {
+        next();
+        return;
+      }
+      viteMiddlewarePromise
+        .then((middlewares) => middlewares(req, res, next))
+        .catch(next);
+    });
   } else {
     const distPath = path.resolve(process.cwd(), 'dist');
     app.use(express.static(distPath, { index: false }));
@@ -1443,6 +1489,11 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  httpServer.on('error', (err) => {
+    console.error(`Voragen server listen error on port ${PORT}:`, err);
+    process.exit(1);
+  });
 
   httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`Voragen server running on http://0.0.0.0:${PORT}`);

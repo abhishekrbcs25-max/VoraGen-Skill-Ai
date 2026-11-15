@@ -125,7 +125,7 @@ export function SkillAnalysisView({
           type="button"
           onClick={() => onRunMultiAgentSync('Manual Skill Analysis Refresh')}
           disabled={isSyncingAI}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors disabled:opacity-60 whitespace-nowrap"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors disabled:opacity-60 whitespace-nowrap"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAI ? 'animate-spin' : ''}`} />
           <span>{isSyncingAI ? 'Collaborating...' : 'Collaborate AI Agents'}</span>
@@ -134,11 +134,11 @@ export function SkillAnalysisView({
 
       {/* Strengths, Weaknesses & Missing Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-5">
-          <p className="text-xs font-semibold text-emerald-700 dark:text-amber-400">
+        <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-5">
+          <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
             Verified Strengths
           </p>
-          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-slate-950 dark:text-white">
+          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-[#0B2545] dark:text-white">
             {match.strongSkillNames.length}
           </p>
           <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400">
@@ -146,11 +146,11 @@ export function SkillAnalysisView({
           </p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-5">
-          <p className="text-xs font-semibold text-amber-700 dark:text-pink-400">
+        <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-5">
+          <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
             Needs Reinforcement (&lt;60%)
           </p>
-          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-slate-950 dark:text-white">
+          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-[#0B2545] dark:text-white">
             {match.weakSkillNames.length + profile.remedialSkills.length}
           </p>
           <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400">
@@ -159,11 +159,11 @@ export function SkillAnalysisView({
           </p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-5">
-          <p className="text-xs font-semibold text-red-700 dark:text-blue-400">
+        <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-5">
+          <p className="text-xs font-semibold text-[#0B2545] dark:text-sky-300">
             Missing for {targetRole.title}
           </p>
-          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-slate-950 dark:text-white">
+          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-[#0B2545] dark:text-white">
             {match.missingSkillNames.length}
           </p>
           <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400">
@@ -175,12 +175,12 @@ export function SkillAnalysisView({
       {/* Diagnostic Assessment Quiz + Multi-Agent War Room */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Interactive Quiz & Genuine Skill Authenticity Test */}
-        <section className="lg:col-span-6 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-5">
+        <section className="lg:col-span-6 rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-5">
           {/* Segmented Mode Switcher */}
           <div
             role="tablist"
             aria-label="Skill evaluation mode"
-            className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-[#141B2D]"
+            className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-[#F4F7FB] dark:bg-[#05070B]"
           >
             <button
               type="button"
@@ -192,8 +192,8 @@ export function SkillAnalysisView({
               }}
               className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-colors ${
                 testMode === 'diagnostic'
-                  ? 'bg-white dark:bg-blue-600 text-slate-950 dark:text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  ? 'bg-white dark:bg-[#1D4ED8] text-[#0B2545] dark:text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-[#0B2545] dark:hover:text-white'
               }`}
             >
               <ClipboardCheck className="w-3.5 h-3.5" />
@@ -209,8 +209,8 @@ export function SkillAnalysisView({
               }}
               className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-colors ${
                 testMode === 'authenticity'
-                  ? 'bg-white dark:bg-blue-600 text-slate-950 dark:text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  ? 'bg-white dark:bg-[#1D4ED8] text-[#0B2545] dark:text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-[#0B2545] dark:hover:text-white'
               }`}
             >
               <ShieldCheck className="w-3.5 h-3.5" />
@@ -247,8 +247,8 @@ export function SkillAnalysisView({
                 }}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                   selectedSkill === sk
-                    ? 'bg-red-600 text-white dark:bg-blue-600'
-                    : 'bg-slate-100 dark:bg-[#141B2D] text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10'
+                    ? 'bg-[#0B2545] text-white dark:bg-[#1D4ED8]'
+                    : 'bg-[#F4F7FB] dark:bg-[#05070B] text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-[#0F213E]'
                 }`}
               >
                 {sk}
@@ -259,7 +259,7 @@ export function SkillAnalysisView({
           {testMode === 'authenticity' && (
             <div className="rounded-xl border border-amber-500/35 bg-amber-50/70 dark:bg-amber-500/10 p-3.5 flex items-center justify-between gap-3 text-xs">
               <div>
-                <span className="font-semibold text-slate-900 dark:text-white">
+                <span className="font-semibold text-[#0B2545] dark:text-white">
                   Claimed {selectedSkill} Level: {claimedLevel}%
                 </span>
                 <p className="text-slate-600 dark:text-slate-300">
@@ -269,8 +269,8 @@ export function SkillAnalysisView({
               <ShieldCheck
                 className={`w-5 h-5 shrink-0 ${
                   profileClaimedSkill?.verified
-                    ? 'text-emerald-600 dark:text-amber-400'
-                    : 'text-amber-600 dark:text-pink-400'
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-amber-600 dark:text-amber-400'
                 }`}
               />
             </div>
@@ -282,23 +282,23 @@ export function SkillAnalysisView({
                 key={q.id}
                 role="radiogroup"
                 aria-label={q.question}
-                className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] p-4 space-y-2.5"
+                className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-4 space-y-2.5"
               >
-                <p className="text-sm font-semibold text-slate-900 dark:text-white leading-snug">
+                <p className="text-sm font-semibold text-[#0B2545] dark:text-white leading-snug">
                   {qIdx + 1}. {q.question}
                 </p>
                 <div className="space-y-1.5">
                   {q.options.map((opt, optIdx) => (
                     <label
                       key={opt}
-                      className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-white dark:hover:bg-[#1B2338] cursor-pointer text-xs text-slate-700 dark:text-slate-200"
+                      className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-white dark:hover:bg-[#0F213E] cursor-pointer text-xs text-slate-700 dark:text-slate-200"
                     >
                       <input
                         type="radio"
                         name={q.id}
                         checked={answers[q.id] === optIdx}
                         onChange={() => setAnswers((prev) => ({ ...prev, [q.id]: optIdx }))}
-                        className="mt-0.5 accent-red-600 dark:accent-blue-500"
+                        className="mt-0.5 accent-[#0B2545] dark:accent-[#1D4ED8]"
                       />
                       <span>{opt}</span>
                     </label>
@@ -310,7 +310,7 @@ export function SkillAnalysisView({
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="submit"
-                className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors"
+                className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors"
               >
                 {testMode === 'authenticity'
                   ? `Verify ${selectedSkill} Authenticity`
@@ -354,8 +354,8 @@ export function SkillAnalysisView({
             <div
               className={`rounded-xl border p-4 text-xs space-y-1.5 ${
                 authenticityResult.isGenuine
-                  ? 'border-emerald-300 dark:border-blue-500/40 bg-emerald-50 dark:bg-blue-500/10 text-emerald-900 dark:text-blue-200'
-                  : 'border-red-300 dark:border-pink-500/40 bg-red-50 dark:bg-pink-500/10 text-red-900 dark:text-pink-200'
+                  ? 'border-emerald-300 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-200'
+                  : 'border-amber-400 dark:border-amber-500/45 bg-amber-50 dark:bg-amber-500/10 text-amber-950 dark:text-amber-200'
               }`}
             >
               <div className="flex items-center justify-between gap-2 font-semibold">
@@ -381,8 +381,8 @@ export function SkillAnalysisView({
             <div
               className={`rounded-xl border p-4 text-xs space-y-1 ${
                 lastOutcome.remedial
-                  ? 'border-red-300 dark:border-pink-500/40 bg-red-50 dark:bg-pink-500/10 text-red-900 dark:text-pink-200'
-                  : 'border-emerald-300 dark:border-blue-500/40 bg-emerald-50 dark:bg-blue-500/10 text-emerald-900 dark:text-blue-200'
+                  ? 'border-amber-400 dark:border-amber-500/45 bg-amber-50 dark:bg-amber-500/10 text-amber-950 dark:text-amber-200'
+                  : 'border-emerald-300 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-200'
               }`}
             >
               <div className="flex items-center gap-2 font-semibold">
@@ -405,11 +405,11 @@ export function SkillAnalysisView({
         </section>
 
         {/* Multi-Agent Collaboration War Room */}
-        <section className="lg:col-span-6 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-5">
+        <section className="lg:col-span-6 rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Bot className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-              <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+              <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
                 Multi-Agent AI Collaboration Log
               </h2>
             </div>
@@ -428,7 +428,7 @@ export function SkillAnalysisView({
               {[1, 2, 3, 4].map((n) => (
                 <div
                   key={n}
-                  className="h-20 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-[#141B2D] animate-pulse"
+                  className="h-20 rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-slate-100 dark:bg-[#05070B] animate-pulse"
                 />
               ))}
             </div>
@@ -449,10 +449,10 @@ export function SkillAnalysisView({
                 {agentReport.steps.map((step, idx) => (
                   <div
                     key={step.agentName}
-                    className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] p-4 space-y-2"
+                    className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-4 space-y-2"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                      <span className="text-sm font-semibold text-[#0B2545] dark:text-white">
                         0{idx + 1}. {step.agentName}
                       </span>
                       <span className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -468,7 +468,7 @@ export function SkillAnalysisView({
                           key={item}
                           className="text-xs text-slate-700 dark:text-slate-300 flex items-start gap-1.5"
                         >
-                          <span className="text-red-600 dark:text-pink-400 font-bold">·</span>
+                          <span className="text-emerald-600 dark:text-amber-400 font-bold">·</span>
                           <span>{item}</span>
                         </li>
                       ))}

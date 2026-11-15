@@ -23,10 +23,10 @@ const TECH_HUB_COORDS: EmployerHubCoord[] = [
   { id: 'hub-mv', label: 'Silicon Valley (Mountain View / SF / Cupertino)', cityMatch: 'Mountain View', lat: 37.422, lng: -122.084, accent: '#2563EB' },
   { id: 'hub-sf', label: 'San Francisco SoMa', cityMatch: 'San Francisco', lat: 37.7897, lng: -122.4014, accent: '#635BFF' },
   { id: 'hub-sea', label: 'Seattle & Redmond Cloud Corridor', cityMatch: 'Redmond', lat: 47.674, lng: -122.1215, accent: '#00A4EF' },
-  { id: 'hub-aus', label: 'Austin Tech Corridor', cityMatch: 'Austin', lat: 30.2672, lng: -97.7431, accent: '#DC2626' },
+  { id: 'hub-aus', label: 'Austin Tech Corridor', cityMatch: 'Austin', lat: 30.2672, lng: -97.7431, accent: '#D97706' },
   { id: 'hub-blr', label: 'Bengaluru Electronic City & Outer Ring', cityMatch: 'Bengaluru', lat: 12.9716, lng: 77.5946, accent: '#059669' },
-  { id: 'hub-bom', label: 'Mumbai BKC & Powai', cityMatch: 'Mumbai', lat: 19.076, lng: 72.8777, accent: '#0066B2' },
-  { id: 'hub-maa', label: 'Chennai OMR IT Corridor', cityMatch: 'Chennai', lat: 13.0827, lng: 80.2707, accent: '#E42527' },
+  { id: 'hub-bom', label: 'Mumbai BKC & Powai', cityMatch: 'Mumbai', lat: 19.076, lng: 72.8777, accent: '#0B2545' },
+  { id: 'hub-maa', label: 'Chennai OMR IT Corridor', cityMatch: 'Chennai', lat: 13.0827, lng: 80.2707, accent: '#15803D' },
   { id: 'hub-muc', label: 'Munich & Walldorf Engineering', cityMatch: 'Munich', lat: 48.1351, lng: 11.582, accent: '#009999' },
   { id: 'hub-lon', label: 'London Kings Cross Tech Hub', cityMatch: 'London', lat: 51.5313, lng: -0.1261, accent: '#1D4ED8' },
   { id: 'hub-syd', label: 'Sydney CBD Tech Central', cityMatch: 'Sydney', lat: -33.8688, lng: 151.2093, accent: '#0052CC' },
@@ -63,7 +63,9 @@ export function EmployerMapExplorer({
   activeCompany,
   onSelectCompany,
 }: EmployerMapExplorerProps) {
-  const compileTimeKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+  const compileTimeKey =
+    (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_GOOGLE_MAPS_API_KEY ||
+    '';
   const [runtimeKey, setRuntimeKey] = useState<string>(
     compileTimeKey && compileTimeKey !== 'MY_GOOGLE_MAPS_API_KEY' ? compileTimeKey : '',
   );
@@ -132,12 +134,12 @@ export function EmployerMapExplorer({
   };
 
   return (
-    <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-5 space-y-4">
+    <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-5 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <Compass className="w-5 h-5 text-red-600 dark:text-amber-400" />
+          <Compass className="w-5 h-5 text-[#0B2545] dark:text-amber-400" />
           <div>
-            <h2 className="font-display text-base font-bold text-slate-950 dark:text-white">
+            <h2 className="font-display text-base font-bold text-[#0B2545] dark:text-white">
               Global Employer Hubs — Interactive Map Explorer
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -150,7 +152,7 @@ export function EmployerMapExplorer({
           type="button"
           onClick={fetchHubInsights}
           disabled={loadingInsights}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] disabled:opacity-60"
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span>
@@ -186,9 +188,9 @@ export function EmployerMapExplorer({
                   }}
                 >
                   <Pin
-                    background={activeCompany?.id === company.id ? '#DC2626' : hub.accent}
+                    background={activeCompany?.id === company.id ? '#D97706' : hub.accent}
                     glyphColor="#FFFFFF"
-                    borderColor="#0F172A"
+                    borderColor="#0B2545"
                   />
                 </AdvancedMarker>
               ))}
@@ -271,8 +273,8 @@ export function EmployerMapExplorer({
 
       {/* Grounded Local Insights Output & Mandatory Source Links */}
       {insightsText && (
-        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] p-4 space-y-3">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-900 dark:text-amber-300">
+        <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-4 space-y-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-[#0B2545] dark:text-amber-300">
             <MapPin className="w-4 h-4" />
             <span>Hub & Ecosystem Brief — {activeCompany?.city || 'Global'}</span>
           </div>
@@ -287,7 +289,7 @@ export function EmployerMapExplorer({
                   href={src.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-white dark:bg-[#0E131F] border border-slate-200 dark:border-white/10 text-blue-700 dark:text-blue-400 hover:underline"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-white dark:bg-[#0A1628] border border-slate-200 dark:border-[#1E3A5F]/60 text-[#0B2545] dark:text-sky-300 hover:underline"
                 >
                   <span>{src.title}</span>
                   <ExternalLink className="w-3 h-3" />

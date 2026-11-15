@@ -46,7 +46,7 @@ export function ProgressTrackingView({
 
       {/* Accurate Radial Readiness Meter + Domain Bars */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        <div className="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 flex flex-col items-center justify-center text-center space-y-4">
+        <div className="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 flex flex-col items-center justify-center text-center space-y-4">
           <div className="relative w-44 h-44 flex items-center justify-center">
             <svg className="w-44 h-44 -rotate-90" viewBox="0 0 160 160" aria-hidden="true">
               <circle
@@ -66,7 +66,7 @@ export function ProgressTrackingView({
                 strokeLinecap="round"
                 strokeDasharray={circumference}
                 strokeDashoffset={dashOffset}
-                className="stroke-red-600 dark:stroke-blue-500 transition-all duration-500"
+                className="stroke-[#0B2545] dark:stroke-emerald-500 transition-all duration-500"
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -102,10 +102,10 @@ export function ProgressTrackingView({
         </div>
 
         {/* Category Mastery Meter */}
-        <div className="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-5">
+        <div className="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-5">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-amber-400" />
-            <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+            <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
               Competency Meters by Domain
             </h2>
           </div>
@@ -123,7 +123,7 @@ export function ProgressTrackingView({
                 </div>
                 <div className="h-2.5 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-red-600 via-amber-500 to-emerald-600 dark:from-blue-500 dark:via-pink-500 dark:to-amber-400 transition-all duration-300"
+                    className="h-full rounded-full bg-gradient-to-r from-[#0B2545] via-emerald-600 to-amber-500 dark:from-[#1D4ED8] dark:via-emerald-500 dark:to-amber-400 transition-all duration-300"
                     style={{ width: `${cat.avgLevel}%` }}
                   />
                 </div>
@@ -145,8 +145,8 @@ export function ProgressTrackingView({
       </div>
 
       {/* Assessment Performance History */}
-      <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4">
-        <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+      <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-4">
+        <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
           Assessment Performance Log ({profile.assessments.length})
         </h2>
 
@@ -177,8 +177,8 @@ export function ProgressTrackingView({
                     <td
                       className={`py-3 px-4 text-right font-mono font-bold tabular-nums ${
                         a.scorePct < 60
-                          ? 'text-red-600 dark:text-pink-400'
-                          : 'text-emerald-700 dark:text-amber-400'
+                          ? 'text-amber-700 dark:text-amber-400'
+                          : 'text-emerald-700 dark:text-emerald-400'
                       }`}
                     >
                       {a.scorePct}%

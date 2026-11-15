@@ -210,7 +210,7 @@ export function CareerLabView({
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 dark:border-white/10 pb-5">
         <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-950 dark:text-white">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#0B2545] dark:text-white">
             Career Lab · AI Interviewer, ATS Scanner & Cohort Benchmark
           </h1>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
@@ -221,7 +221,7 @@ export function CareerLabView({
         <button
           type="button"
           onClick={() => onNavigate('skill-analysis')}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors whitespace-nowrap"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors whitespace-nowrap"
         >
           <Zap className="w-3.5 h-3.5" />
           <span>Run Genuine Skill Check</span>
@@ -231,11 +231,11 @@ export function CareerLabView({
       {/* Row 1: AI Mock Interviewer + Resume/JD ATS Skill Extractor */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* AI Mock Technical Interviewer */}
-        <section className="lg:col-span-6 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4">
+        <section className="lg:col-span-6 rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Mic className="w-5 h-5 text-red-600 dark:text-blue-400" />
-              <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+              <Mic className="w-5 h-5 text-[#0B2545] dark:text-sky-300" />
+              <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
                 AI Mock Technical Interviewer
               </h2>
             </div>
@@ -258,7 +258,7 @@ export function CareerLabView({
                 setSelectedQuestion(e.target.value);
                 setEvalResult(null);
               }}
-              className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-xs text-slate-900 dark:text-white"
+              className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-xs text-slate-900 dark:text-white"
             >
               {roleQuestions.map((q) => (
                 <option key={q} value={q}>
@@ -268,7 +268,7 @@ export function CareerLabView({
             </select>
           </div>
 
-          <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] p-3.5">
+          <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-3.5">
             <p className="text-xs font-semibold text-slate-900 dark:text-white leading-relaxed">
               “{selectedQuestion}”
             </p>
@@ -289,7 +289,7 @@ export function CareerLabView({
                     'I would use stateless JWT access tokens paired with short-lived refresh rotation, add Redis rate limiting per tenant key, and create composite B-tree SQL indexes on (tenant_id, created_at) so API queries stay O(log n) under load.',
                   )
                 }
-                className="text-[11px] font-medium text-red-700 dark:text-amber-400 hover:underline"
+                className="text-[11px] font-medium text-[#0B2545] dark:text-amber-400 hover:underline"
               >
                 Insert Sample Answer
               </button>
@@ -300,12 +300,12 @@ export function CareerLabView({
               value={answerText}
               onChange={(e) => setAnswerText(e.target.value)}
               placeholder="Explain architecture, complexity, edge cases, and database/API trade-offs..."
-              className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] p-3 text-xs text-slate-900 dark:text-white leading-relaxed"
+              className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] p-3 text-xs text-slate-900 dark:text-white leading-relaxed"
             />
             <button
               type="submit"
               disabled={isEvaluating || !answerText.trim()}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors disabled:opacity-60"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>{isEvaluating ? 'Grading with AI Rubric...' : 'Evaluate Interview Answer'}</span>
@@ -313,7 +313,7 @@ export function CareerLabView({
           </form>
 
           {evalResult && (
-            <div className="rounded-xl border border-emerald-500/35 dark:border-blue-500/35 bg-emerald-50/70 dark:bg-blue-500/10 p-4 space-y-3">
+            <div className="rounded-xl border border-emerald-500/35 dark:border-[#1E3A5F] bg-emerald-50/70 dark:bg-[#05070B] p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-900 dark:text-white">
                   Hiring Committee Rubric Score
@@ -340,13 +340,13 @@ export function CareerLabView({
                   </ul>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-amber-800 dark:text-pink-300">
+                  <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">
                     Next Improvements
                   </p>
                   <ul className="mt-1 space-y-1">
                     {evalResult.improvements.map((imp) => (
                       <li key={imp} className="text-xs text-slate-700 dark:text-slate-300 flex gap-1.5">
-                        <span className="text-red-600 dark:text-pink-400">→</span>
+                        <span className="text-amber-600 dark:text-amber-400">→</span>
                         <span>{imp}</span>
                       </li>
                     ))}
@@ -358,11 +358,11 @@ export function CareerLabView({
         </section>
 
         {/* Resume / Job-Description ATS Skill Extractor */}
-        <section className="lg:col-span-6 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4">
+        <section className="lg:col-span-6 rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <FileSearch className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-              <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+              <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
                 Resume & Job-Description ATS Skill Scanner
               </h2>
             </div>
@@ -383,7 +383,7 @@ export function CareerLabView({
                   setAtsInput(SAMPLE_RESUME);
                   setImportNotice(null);
                 }}
-                className="text-[11px] font-medium text-red-700 dark:text-amber-400 hover:underline"
+                className="text-[11px] font-medium text-[#0B2545] dark:text-amber-400 hover:underline"
               >
                 Sample Resume
               </button>
@@ -399,15 +399,15 @@ export function CareerLabView({
             }}
             aria-label="Paste resume or job description text"
             placeholder="Paste any job posting or resume text to extract technical skills and compute ATS match..."
-            className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] p-3 text-xs text-slate-900 dark:text-white leading-relaxed"
+            className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] p-3 text-xs text-slate-900 dark:text-white leading-relaxed"
           />
 
-          <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] p-4 space-y-3">
+          <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-900 dark:text-white">
                 ATS Keyword Match vs Your Profile
               </span>
-              <span className="font-mono text-base font-bold tabular-nums text-red-700 dark:text-amber-400">
+              <span className="font-mono text-base font-bold tabular-nums text-[#0B2545] dark:text-amber-400">
                 {atsBreakdown.matchPct}%
               </span>
             </div>
@@ -422,7 +422,7 @@ export function CareerLabView({
                 </p>
               </div>
               <div>
-                <p className="font-semibold text-red-700 dark:text-pink-400">
+                <p className="font-semibold text-amber-700 dark:text-amber-400">
                   Missing from Profile ({atsBreakdown.missingFromProfile.length})
                 </p>
                 <p className="mt-1 text-slate-600 dark:text-slate-300">
@@ -435,7 +435,7 @@ export function CareerLabView({
               <button
                 type="button"
                 onClick={handleImportDetectedSkills}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Import Detected Skills to Profile</span>
@@ -456,12 +456,12 @@ export function CareerLabView({
       </div>
 
       {/* Row 2: Cohort Benchmarking & Daily Micro-Sprint */}
-      <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-5">
+      <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
             <BarChart3 className="w-5 h-5 text-emerald-600 dark:text-amber-400" />
             <div>
-              <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+              <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
                 Live Cohort Percentile Benchmark (400+ Students)
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -476,7 +476,7 @@ export function CareerLabView({
               onClick={() => onNavigate('code-arena')}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-white/15 text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-white/5"
             >
-              <Rocket className="w-3.5 h-3.5 text-red-600 dark:text-pink-400" />
+              <Rocket className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
               <span>Daily Code Sprint (+25 pts)</span>
             </button>
             <button
@@ -494,7 +494,7 @@ export function CareerLabView({
           {cohortMetrics.map((m) => (
             <div
               key={m.label}
-              className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] p-4 space-y-2.5"
+              className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-4 space-y-2.5"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -504,12 +504,12 @@ export function CareerLabView({
                   Top {Math.max(1, 100 - m.percentile)}%
                 </span>
               </div>
-              <p className="font-display text-xl font-bold tabular-nums text-slate-950 dark:text-white">
+              <p className="font-display text-xl font-bold tabular-nums text-[#0B2545] dark:text-white">
                 {m.userValue}
               </p>
               <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-red-600 via-amber-500 to-emerald-600 dark:from-blue-500 dark:via-pink-500 dark:to-amber-400 transition-all duration-500"
+                  className="h-full rounded-full bg-gradient-to-r from-[#0B2545] via-emerald-600 to-amber-500 dark:from-[#1D4ED8] dark:via-emerald-500 dark:to-amber-400 transition-all duration-500"
                   style={{ width: `${m.percentile}%` }}
                 />
               </div>

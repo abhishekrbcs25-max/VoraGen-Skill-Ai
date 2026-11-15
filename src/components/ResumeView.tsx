@@ -309,13 +309,13 @@ export function ResumeView({
   return (
     <div className="space-y-8">
       {/* Header & Export Toolbar */}
-      <div className="no-print flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 dark:border-white/10 pb-5">
+      <div className="no-print flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 dark:border-[#1E3A5F]/60 pb-5">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-red-700 dark:text-amber-400">
+          <div className="flex items-center gap-2 text-xs font-semibold text-[#0B2545] dark:text-amber-400">
             <FileText className="w-4 h-4" />
             <span>Resume Builder &amp; ATS CV Studio</span>
           </div>
-          <h1 className="mt-1 font-display text-2xl sm:text-3xl font-bold text-slate-950 dark:text-white">
+          <h1 className="mt-1 font-display text-2xl sm:text-3xl font-bold text-[#0B2545] dark:text-white">
             Create &amp; Export Your Resume
           </h1>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
@@ -327,7 +327,7 @@ export function ResumeView({
           <button
             type="button"
             onClick={handleCopyMarkdown}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-white/15 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-[#1E3A5F]/70 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
           >
             {copiedMd ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copiedMd ? 'Copied Markdown' : 'Copy Markdown'}</span>
@@ -336,7 +336,7 @@ export function ResumeView({
           <button
             type="button"
             onClick={handleDownloadMarkdown}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-white/15 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-[#1E3A5F]/70 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Download .md</span>
@@ -345,7 +345,7 @@ export function ResumeView({
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors"
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Print / Save as PDF</span>
@@ -367,7 +367,7 @@ export function ResumeView({
             <button
               type="button"
               onClick={onOpenAuthModal}
-              className="px-4 py-2 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 whitespace-nowrap"
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] whitespace-nowrap"
             >
               Sign In / Create Account
             </button>
@@ -376,22 +376,22 @@ export function ResumeView({
       )}
 
       {/* Completeness Bar */}
-      <section className="no-print rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-5 space-y-3">
+      <section className="no-print rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-5 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-amber-400" />
-            <span className="text-sm font-semibold text-slate-950 dark:text-white">
+            <span className="text-sm font-semibold text-[#0B2545] dark:text-white">
               Resume Completeness
             </span>
           </div>
-          <span className="font-mono text-sm font-bold tabular-nums text-red-700 dark:text-amber-400">
+          <span className="font-mono text-sm font-bold tabular-nums text-[#0B2545] dark:text-amber-400">
             {completeness.scorePct}% Ready
           </span>
         </div>
 
         <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-red-600 via-amber-500 to-emerald-600 dark:from-blue-500 dark:via-pink-500 dark:to-amber-400 transition-all duration-300"
+            className="h-full rounded-full bg-gradient-to-r from-[#0B2545] via-emerald-600 to-amber-500 dark:from-[#1D4ED8] dark:via-emerald-500 dark:to-amber-400 transition-all duration-300"
             style={{ width: `${completeness.scorePct}%` }}
           />
         </div>
@@ -408,7 +408,7 @@ export function ResumeView({
           {completeness.missingSections.map((sec) => (
             <span
               key={sec}
-              className="px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 font-medium"
+              className="px-2.5 py-0.5 rounded-md bg-[#F4F7FB] dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-[#1E3A5F]/60 font-medium"
             >
               + Add {sec}
             </span>
@@ -423,12 +423,12 @@ export function ResumeView({
           {/* 1. Personal Details & Career Summary */}
           <form
             onSubmit={handleSaveContactSummary}
-            className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4"
+            className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-4"
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <User className="w-5 h-5 text-red-600 dark:text-blue-400" />
-                <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+                <User className="w-5 h-5 text-[#0B2545] dark:text-amber-400" />
+                <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
                   1. Contact &amp; Professional Summary
                 </h2>
               </div>
@@ -452,7 +452,7 @@ export function ResumeView({
                   type="text"
                   value={draftName}
                   onChange={(e) => updateDraftAndSync({ name: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
               </div>
               <div>
@@ -465,7 +465,7 @@ export function ResumeView({
                   value={draftHeadline}
                   onChange={(e) => updateDraftAndSync({ headline: e.target.value })}
                   placeholder={`e.g., ${targetRole.title}`}
-                  className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
               </div>
               <div>
@@ -477,7 +477,7 @@ export function ResumeView({
                   type="email"
                   value={draftEmail}
                   onChange={(e) => updateDraftAndSync({ email: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
               </div>
               <div>
@@ -490,7 +490,7 @@ export function ResumeView({
                   value={draftPhone}
                   onChange={(e) => updateDraftAndSync({ phone: e.target.value })}
                   placeholder="+1 555 010 2026"
-                  className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
               </div>
               <div>
@@ -503,7 +503,7 @@ export function ResumeView({
                   value={draftLocation}
                   onChange={(e) => updateDraftAndSync({ location: e.target.value })}
                   placeholder="Bengaluru, India · Remote"
-                  className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
               </div>
               <div>
@@ -516,7 +516,7 @@ export function ResumeView({
                   value={draftGithubUrl}
                   onChange={(e) => updateDraftAndSync({ githubUrl: e.target.value })}
                   placeholder="https://github.com/username"
-                  className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
               </div>
             </div>
@@ -531,14 +531,14 @@ export function ResumeView({
                 value={draftSummary}
                 onChange={(e) => updateDraftAndSync({ resumeSummary: e.target.value })}
                 placeholder="Write a concise 2–3 sentence summary highlighting your education, verified skills, and project impact..."
-                className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
               />
             </div>
 
             <div className="flex justify-end">
               <button
                 type="submit"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors"
               >
                 {contactSaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
                 <span>
@@ -553,10 +553,10 @@ export function ResumeView({
           </form>
 
           {/* 2. Educational Background */}
-          <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4">
+          <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-4">
             <div className="flex items-center gap-2">
               <GraduationCap className="w-5 h-5 text-emerald-600 dark:text-amber-400" />
-              <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+              <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
                 2. Educational Background ({educationHistory.length})
               </h2>
             </div>
@@ -566,7 +566,7 @@ export function ResumeView({
                 {educationHistory.map((edu) => (
                   <div
                     key={edu.id}
-                    className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] p-3.5"
+                    className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-3.5"
                   >
                     <div className="space-y-0.5">
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">
@@ -585,7 +585,7 @@ export function ResumeView({
                       type="button"
                       aria-label={`Remove education ${edu.degree} at ${edu.institution}`}
                       onClick={() => handleRemoveEducation(edu.id)}
-                      className="text-slate-400 hover:text-red-600 dark:hover:text-pink-400 p-1"
+                      className="text-slate-400 hover:text-[#0B2545] dark:hover:text-amber-400 p-1"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -594,7 +594,7 @@ export function ResumeView({
               </div>
             )}
 
-            <form onSubmit={handleAddEducation} className="space-y-3 pt-2 border-t border-slate-200 dark:border-white/10">
+            <form onSubmit={handleAddEducation} className="space-y-3 pt-2 border-t border-slate-200 dark:border-[#1E3A5F]/60">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   type="text"
@@ -603,7 +603,7 @@ export function ResumeView({
                   placeholder="Institution / University *"
                   aria-label="Education institution"
                   required
-                  className="rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
                 <input
                   type="text"
@@ -612,7 +612,7 @@ export function ResumeView({
                   placeholder="Degree (e.g., B.Tech, B.Sc, Diploma) *"
                   aria-label="Education degree"
                   required
-                  className="rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
               </div>
 
@@ -623,7 +623,7 @@ export function ResumeView({
                   onChange={(e) => setFieldOfStudy(e.target.value)}
                   placeholder="Field of Study (e.g., Computer Science)"
                   aria-label="Field of study"
-                  className="sm:col-span-6 rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="sm:col-span-6 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
                 <input
                   type="text"
@@ -631,7 +631,7 @@ export function ResumeView({
                   onChange={(e) => setStartYear(e.target.value)}
                   placeholder="Start Year"
                   aria-label="Start year"
-                  className="sm:col-span-2 rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm tabular-nums text-slate-900 dark:text-white"
+                  className="sm:col-span-2 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm tabular-nums text-slate-900 dark:text-white"
                 />
                 <input
                   type="text"
@@ -639,7 +639,7 @@ export function ResumeView({
                   onChange={(e) => setEndYear(e.target.value)}
                   placeholder="End Year"
                   aria-label="End year"
-                  className="sm:col-span-2 rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm tabular-nums text-slate-900 dark:text-white"
+                  className="sm:col-span-2 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm tabular-nums text-slate-900 dark:text-white"
                 />
                 <input
                   type="text"
@@ -647,7 +647,7 @@ export function ResumeView({
                   onChange={(e) => setGpaOrScore(e.target.value)}
                   placeholder="GPA / %"
                   aria-label="GPA or score"
-                  className="sm:col-span-2 rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="sm:col-span-2 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
               </div>
 
@@ -658,11 +658,11 @@ export function ResumeView({
                   onChange={(e) => setEduHighlights(e.target.value)}
                   placeholder="Coursework or academic honors (optional)"
                   aria-label="Education highlights"
-                  className="flex-1 rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="flex-1 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
                 <button
                   type="submit"
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-blue-600 dark:hover:bg-blue-500 whitespace-nowrap"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] whitespace-nowrap"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add Education</span>
@@ -672,10 +672,10 @@ export function ResumeView({
           </section>
 
           {/* 3. Skills Gained */}
-          <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4">
+          <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-4">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-red-600 dark:text-pink-400" />
-              <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+              <ShieldCheck className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
+              <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
                 3. Skills Gained ({profile.skills.length})
               </h2>
             </div>
@@ -685,7 +685,7 @@ export function ResumeView({
                 {profile.skills.map((skill) => (
                   <span
                     key={skill.name}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] text-xs font-medium text-slate-900 dark:text-white"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] text-xs font-medium text-slate-900 dark:text-white"
                   >
                     <span>
                       {skill.name} ({skill.level}%)
@@ -700,7 +700,7 @@ export function ResumeView({
                           skills: profile.skills.filter((s) => s.name !== skill.name),
                         })
                       }
-                      className="text-slate-400 hover:text-red-600 dark:hover:text-pink-400"
+                      className="text-slate-400 hover:text-[#0B2545] dark:hover:text-amber-400"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -709,20 +709,20 @@ export function ResumeView({
               </div>
             )}
 
-            <form onSubmit={handleAddSkill} className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 pt-2 border-t border-slate-200 dark:border-white/10">
+            <form onSubmit={handleAddSkill} className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 pt-2 border-t border-slate-200 dark:border-[#1E3A5F]/60">
               <input
                 type="text"
                 value={skillName}
                 onChange={(e) => setSkillName(e.target.value)}
                 placeholder="Skill gained (e.g., React, Python, SQL)"
                 aria-label="Resume skill name"
-                className="sm:col-span-5 rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                className="sm:col-span-5 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
               />
               <select
                 value={skillCategory}
                 onChange={(e) => setSkillCategory(e.target.value as UserSkill['category'])}
                 aria-label="Resume skill category"
-                className="sm:col-span-3 rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                className="sm:col-span-3 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
               >
                 <option value="Frontend">Frontend</option>
                 <option value="Backend">Backend</option>
@@ -738,11 +738,11 @@ export function ResumeView({
                 value={skillLevel}
                 onChange={(e) => setSkillLevel(Number(e.target.value))}
                 aria-label="Resume skill proficiency"
-                className="sm:col-span-2 rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm tabular-nums text-slate-900 dark:text-white"
+                className="sm:col-span-2 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm tabular-nums text-slate-900 dark:text-white"
               />
               <button
                 type="submit"
-                className="sm:col-span-2 px-3 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 whitespace-nowrap"
+                className="sm:col-span-2 px-3 py-2 rounded-lg text-sm font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] whitespace-nowrap"
               >
                 Add
               </button>
@@ -750,10 +750,10 @@ export function ResumeView({
           </section>
 
           {/* 4. Projects */}
-          <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4">
+          <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-4">
             <div className="flex items-center gap-2">
-              <FolderGit2 className="w-5 h-5 text-red-600 dark:text-blue-400" />
-              <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+              <FolderGit2 className="w-5 h-5 text-[#0B2545] dark:text-amber-400" />
+              <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
                 4. Projects ({profile.projects.length})
               </h2>
             </div>
@@ -763,7 +763,7 @@ export function ResumeView({
                 {profile.projects.map((proj) => (
                   <div
                     key={proj.id}
-                    className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] p-3.5"
+                    className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-3.5"
                   >
                     <div className="space-y-1">
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">{proj.title}</p>
@@ -783,7 +783,7 @@ export function ResumeView({
                           projects: profile.projects.filter((p) => p.id !== proj.id),
                         })
                       }
-                      className="text-slate-400 hover:text-red-600 dark:hover:text-pink-400 p-1"
+                      className="text-slate-400 hover:text-[#0B2545] dark:hover:text-amber-400 p-1"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -792,7 +792,7 @@ export function ResumeView({
               </div>
             )}
 
-            <form onSubmit={handleAddProject} className="space-y-2.5 pt-2 border-t border-slate-200 dark:border-white/10">
+            <form onSubmit={handleAddProject} className="space-y-2.5 pt-2 border-t border-slate-200 dark:border-[#1E3A5F]/60">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <input
                   type="text"
@@ -801,7 +801,7 @@ export function ResumeView({
                   placeholder="Project title *"
                   aria-label="Resume project title"
                   required
-                  className="rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
                 <input
                   type="text"
@@ -809,7 +809,7 @@ export function ResumeView({
                   onChange={(e) => setProjRepo(e.target.value)}
                   placeholder="Repo / Live URL (optional)"
                   aria-label="Resume project URL"
-                  className="rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
               </div>
               <textarea
@@ -819,7 +819,7 @@ export function ResumeView({
                 placeholder="Describe what you built and the measurable impact *"
                 aria-label="Resume project description"
                 required
-                className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
               />
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
@@ -828,11 +828,11 @@ export function ResumeView({
                   onChange={(e) => setProjSkills(e.target.value)}
                   placeholder="Tech stack comma-separated (React, Node.js, PostgreSQL)"
                   aria-label="Resume project tech stack"
-                  className="flex-1 rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="flex-1 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
                 <button
                   type="submit"
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 whitespace-nowrap"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] whitespace-nowrap"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add Project</span>
@@ -842,10 +842,10 @@ export function ResumeView({
           </section>
 
           {/* 5. Certifications Obtained */}
-          <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-4">
+          <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-4">
             <div className="flex items-center gap-2">
               <Award className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-              <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+              <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
                 5. Certifications Obtained ({profile.certifications.length})
               </h2>
             </div>
@@ -855,7 +855,7 @@ export function ResumeView({
                 {profile.certifications.map((cert) => (
                   <div
                     key={cert.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] p-3.5"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-3.5"
                   >
                     <div>
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">{cert.title}</p>
@@ -873,7 +873,7 @@ export function ResumeView({
                           certifications: profile.certifications.filter((c) => c.id !== cert.id),
                         })
                       }
-                      className="text-slate-400 hover:text-red-600 dark:hover:text-pink-400 p-1"
+                      className="text-slate-400 hover:text-[#0B2545] dark:hover:text-amber-400 p-1"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -882,7 +882,7 @@ export function ResumeView({
               </div>
             )}
 
-            <form onSubmit={handleAddCertification} className="space-y-2.5 pt-2 border-t border-slate-200 dark:border-white/10">
+            <form onSubmit={handleAddCertification} className="space-y-2.5 pt-2 border-t border-slate-200 dark:border-[#1E3A5F]/60">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <input
                   type="text"
@@ -891,7 +891,7 @@ export function ResumeView({
                   placeholder="Certification name *"
                   aria-label="Resume certification title"
                   required
-                  className="rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
                 <input
                   type="text"
@@ -900,7 +900,7 @@ export function ResumeView({
                   placeholder="Issuing organization *"
                   aria-label="Resume certification issuer"
                   required
-                  className="rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
@@ -910,7 +910,7 @@ export function ResumeView({
                   onChange={(e) => setCertYear(e.target.value)}
                   placeholder="Year"
                   aria-label="Resume certification year"
-                  className="sm:w-28 rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm tabular-nums text-slate-900 dark:text-white"
+                  className="sm:w-28 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm tabular-nums text-slate-900 dark:text-white"
                 />
                 <input
                   type="text"
@@ -918,11 +918,11 @@ export function ResumeView({
                   onChange={(e) => setCertCredentialId(e.target.value)}
                   placeholder="Credential ID (optional)"
                   aria-label="Resume certification credential ID"
-                  className="flex-1 rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="flex-1 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
                 />
                 <button
                   type="submit"
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-blue-600 dark:hover:bg-blue-500 whitespace-nowrap"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] whitespace-nowrap"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add Certification</span>
@@ -945,11 +945,11 @@ export function ResumeView({
             className="rounded-xl border border-slate-200 bg-white text-slate-900 shadow-lg p-7 sm:p-9 space-y-6"
           >
             {/* Resume Header */}
-            <header className="border-b-2 border-slate-900 pb-4 space-y-1.5">
-              <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-950">
+            <header className="border-b-2 border-[#0B2545] pb-4 space-y-1.5">
+              <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#0B2545]">
                 {previewProfile.name.trim() || 'Your Full Name'}
               </h2>
-              <p className="text-sm font-semibold text-red-700">
+              <p className="text-sm font-semibold text-emerald-700">
                 {previewProfile.headline.trim() || targetRole.title}
               </p>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600 pt-1">

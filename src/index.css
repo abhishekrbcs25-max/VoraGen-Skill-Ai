@@ -13,28 +13,28 @@
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 
-    /* Light Mode: White, Red, Gold, Green */
+    /* Light Mode: White, Navy, Green, Gold */
     --bg-canvas: #FFFFFF;
-    --bg-surface: #F8FAFC;
+    --bg-surface: #F4F7FB;
     --bg-elevated: #FFFFFF;
-    --border-hairline: #E2E8F0;
-    --text-primary: #0F172A;
-    --text-secondary: #475569;
-    --accent-primary: #DC2626;
-    --accent-secondary: #16A34A;
+    --border-hairline: #D8E2EE;
+    --text-primary: #0B1B34;
+    --text-secondary: #415572;
+    --accent-primary: #0B2545;
+    --accent-secondary: #15803D;
     --accent-gold: #D97706;
   }
 
   .dark {
-    /* Dark Mode: Black, Blue, Pink, Gold */
-    --bg-canvas: #07090F;
-    --bg-surface: #0E131F;
-    --bg-elevated: #141B2D;
-    --border-hairline: rgba(255, 255, 255, 0.09);
+    /* Dark Mode: Black, Navy, Green, Gold */
+    --bg-canvas: #05070B;
+    --bg-surface: #0A1628;
+    --bg-elevated: #0F213E;
+    --border-hairline: rgba(148, 163, 184, 0.16);
     --text-primary: #F8FAFC;
     --text-secondary: #94A3B8;
-    --accent-primary: #3B82F6;
-    --accent-secondary: #EC4899;
+    --accent-primary: #1D4ED8;
+    --accent-secondary: #10B981;
     --accent-gold: #F59E0B;
   }
 

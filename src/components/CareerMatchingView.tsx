@@ -64,10 +64,10 @@ export function CareerMatchingView({
               key={role.id}
               className={`rounded-2xl border p-5 flex flex-col justify-between transition-colors ${
                 isTarget
-                  ? 'border-red-600 dark:border-blue-500 bg-red-50/40 dark:bg-blue-500/10'
+                  ? 'border-[#0B2545] dark:border-[#1D4ED8] bg-[#F4F7FB] dark:bg-[#0F213E]'
                   : isPreview
-                    ? 'border-amber-500 dark:border-pink-500 bg-white dark:bg-[#0E131F]'
-                    : 'border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F]'
+                    ? 'border-amber-500 dark:border-amber-400 bg-white dark:bg-[#0A1628]'
+                    : 'border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628]'
               }`}
             >
               <div>
@@ -76,11 +76,11 @@ export function CareerMatchingView({
                     <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
                       {role.domain} · {role.demandGrowth}
                     </p>
-                    <h2 className="mt-1 font-display text-lg font-bold text-slate-950 dark:text-white">
+                    <h2 className="mt-1 font-display text-lg font-bold text-[#0B2545] dark:text-white">
                       {role.title}
                     </h2>
                   </div>
-                  <span className="font-mono text-lg font-bold tabular-nums text-red-700 dark:text-amber-400">
+                  <span className="font-mono text-lg font-bold tabular-nums text-[#0B2545] dark:text-amber-400">
                     {m.overallReadinessPct}%
                   </span>
                 </div>
@@ -91,7 +91,7 @@ export function CareerMatchingView({
 
                 <div className="mt-3 h-2 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-red-600 to-emerald-600 dark:from-blue-500 dark:to-pink-500"
+                    className="h-full rounded-full bg-gradient-to-r from-[#0B2545] via-emerald-600 to-amber-500 dark:from-[#1D4ED8] dark:via-emerald-500 dark:to-amber-400"
                     style={{ width: `${m.overallReadinessPct}%` }}
                   />
                 </div>
@@ -122,7 +122,7 @@ export function CareerMatchingView({
                       setPreviewRoleId(role.id);
                       onSelectCareerGoal(role.id);
                     }}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors"
                   >
                     <span>Set Career Goal</span>
                     <ArrowRight className="w-3 h-3" />
@@ -135,12 +135,12 @@ export function CareerMatchingView({
       </div>
 
       {/* Detailed Side-by-Side Gap Breakdown for Inspected Role */}
-      <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-5">
+      <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <Compass className="w-5 h-5 text-red-600 dark:text-pink-400" />
+            <Compass className="w-5 h-5 text-[#0B2545] dark:text-amber-400" />
             <div>
-              <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+              <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
                 Skill Gap Matrix: {previewRole.title}
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -155,7 +155,7 @@ export function CareerMatchingView({
             <button
               type="button"
               onClick={() => onSelectCareerGoal(previewRole.id)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB]"
             >
               <Target className="w-3.5 h-3.5" />
               <span>Switch & Recalculate AI Roadmap</span>
@@ -187,7 +187,7 @@ export function CareerMatchingView({
                           ? 'text-emerald-700 dark:text-emerald-400'
                           : row.status === 'In Progress'
                             ? 'text-amber-700 dark:text-amber-400'
-                            : 'text-red-700 dark:text-pink-400'
+                            : 'text-[#0B2545] dark:text-sky-300'
                       }`}
                     >
                       {row.status}
@@ -204,10 +204,10 @@ export function CareerMatchingView({
                       <div
                         className={`h-full rounded-full ${
                           row.status === 'Mastered'
-                            ? 'bg-emerald-600 dark:bg-blue-500'
+                            ? 'bg-emerald-600 dark:bg-emerald-500'
                             : row.status === 'In Progress'
-                              ? 'bg-amber-500'
-                              : 'bg-red-600 dark:bg-pink-500'
+                              ? 'bg-amber-500 dark:bg-amber-400'
+                              : 'bg-[#0B2545] dark:bg-[#1D4ED8]'
                         }`}
                         style={{
                           width: `${Math.min(100, Math.round((row.currentLevel / row.targetLevel) * 100))}%`,

@@ -111,3 +111,55 @@ test('defeat condition is reachable when hp drops to 0', () => {
   assert.equal(state.phase, 'gameover');
   assert.equal(state.hp, 0);
 });
+
+test('dash grants brief speed boost and invulnerability and respects cooldown', () => {
+  let state = createInitialDefenderState(0, true);
+  state.invulnTimer = 0;
+  state = stepDefenderSimulation(state, { ...IDLE_INPUT, right: true, dashJustPressed: true }, 0.016);
+  assert.ok(state.dashCooldown > 0.9);
+  assert.ok(state.invulnTimer >= 0.2);
+  assert.ok(state.playerVx > 15);
+});
+
+test('charger telegraphs then charges, mastery cores heal, and clearing wave 3 triggers victory', () => {
+  let state = createInitialDefenderState(0, true);
+  state.hp = 4;
+  state.wave = 3;
+  state.threats = [
+    {
+      id: 200,
+      archetype: 'charger',
+      x: 0,
+      z: -6,
+      vx: 0,
+      vz: 0,
+      hp: 2,
+      maxHp: 2,
+      radius: 0.95,
+      phaseOffset: 0,
+      telegraphTimer: 0.02,
+      cooldownTimer: 0,
+      koTimer: 0,
+      hitFlashTimer: 0,
+      charging: false,
+    },
+  ];
+  state.cores = [{ id: 201, label: 'React', x: 0.2, z: 0.2, collected: false }];
+
+  // Step once: collects mastery core (+hp to 5) and triggers charger dash
+  state = stepDefenderSimulation(state, IDLE_INPUT, 0.03);
+  assert.equal(state.coresCollected, 1);
+  assert.equal(state.hp, 5);
+  assert.equal(state.threats[0].charging, true);
+
+  // Fire twice to damage then defeat charger, then let koTimer expire -> victory
+  state = stepDefenderSimulation(state, { ...IDLE_INPUT, fireJustPressed: true }, 0.02);
+  for (let i = 0; i < 20; i++) {
+    state = stepDefenderSimulation(state, IDLE_INPUT, 0.03);
+  }
+  state = stepDefenderSimulation(state, { ...IDLE_INPUT, fireJustPressed: true }, 0.02);
+  for (let i = 0; i < 40; i++) {
+    state = stepDefenderSimulation(state, IDLE_INPUT, 0.03);
+  }
+  assert.equal(state.phase, 'victory');
+});

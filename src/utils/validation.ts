@@ -11,13 +11,14 @@ export function sanitizeExternalUrl(raw?: unknown): string | undefined {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
 
-  // Reject dangerous URI schemes (XSS / script / data injection)
+  // Reject dangerous or non-web URI schemes (XSS / script / data / custom scheme injection)
   const lower = trimmed.toLowerCase();
   if (
     lower.startsWith('javascript:') ||
     lower.startsWith('data:') ||
     lower.startsWith('vbscript:') ||
-    lower.startsWith('file:')
+    lower.startsWith('file:') ||
+    (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) && !/^https?:/i.test(trimmed))
   ) {
     return undefined;
   }
@@ -25,8 +26,10 @@ export function sanitizeExternalUrl(raw?: unknown): string | undefined {
   const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
     const parsed = new URL(candidate);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return undefined;
+    if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !parsed.hostname.includes('.')) {
+      if (parsed.hostname !== 'localhost') {
+        return undefined;
+      }
     }
     return parsed.toString();
   } catch {

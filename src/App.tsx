@@ -862,7 +862,7 @@ export default function App() {
       <ErrorBoundary>
         <Suspense
           fallback={
-            <div className="min-h-screen flex items-center justify-center bg-[#07090F] text-sm text-slate-300">
+            <div className="min-h-screen flex items-center justify-center bg-[#05070B] text-sm text-slate-300">
               Loading 3D Skill Defender Arena...
             </div>
           }
@@ -889,13 +889,13 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen flex bg-white dark:bg-[#07090F] text-slate-900 dark:text-slate-100 ${
+      className={`min-h-screen flex bg-white dark:bg-[#05070B] text-[#0B2545] dark:text-slate-100 ${
         settings.reduceMotion ? '[&_*]:transition-none' : ''
       }`}
     >
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-red-600 dark:focus:bg-blue-600 focus:text-white focus:text-xs focus:font-semibold"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-[#0B2545] dark:focus:bg-[#1D4ED8] focus:text-white focus:text-xs focus:font-semibold"
       >
         Skip to main content
       </a>
@@ -988,6 +988,10 @@ export default function App() {
                   onRunMultiAgentSync={() =>
                     runMultiAgentCollaboration(profile, 'Home Dashboard Sync')
                   }
+                  onOpenAuthModal={() => {
+                    setAuthModalReason(undefined);
+                    setAuthModalOpen(true);
+                  }}
                   isSyncingAI={isSyncingAI}
                 />
               )}

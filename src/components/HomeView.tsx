@@ -1,18 +1,28 @@
+import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   ArrowRight,
   Award,
   Briefcase,
+  CheckCircle2,
+  Clock,
   Code2,
   Gamepad2,
+  LogIn,
   Mic,
   ShieldCheck,
   Sparkles,
   Target,
+  TrendingUp,
   Video,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { DailyProductivityHeatmap } from './DailyProductivityHeatmap';
+import {
+  buildSkillProgressTracks,
+  formatUserTimeZoneContext,
+  getTimeOfDayGreeting,
+} from '../utils/greeting';
 import type { CareerRole, NavSection, SkillMatchBreakdown, UserProfile } from '../types';
 import capWarRoomImg from '../assets/images/cap_war_room_1794637597727.jpg';
 import capVideoStudioImg from '../assets/images/cap_video_studio_1794637598824.jpg';
@@ -30,6 +40,7 @@ interface HomeViewProps {
   onNavigate: (section: NavSection) => void;
   onOpenAuthenticityTest: () => void;
   onRunMultiAgentSync: () => void;
+  onOpenAuthModal?: () => void;
   isSyncingAI: boolean;
 }
 
@@ -40,8 +51,29 @@ export function HomeView({
   onNavigate,
   onOpenAuthenticityTest,
   onRunMultiAgentSync,
+  onOpenAuthModal,
   isSyncingAI,
 }: HomeViewProps) {
+  const [now, setNow] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const greeting = useMemo(() => getTimeOfDayGreeting(now), [now]);
+  const timeZoneCtx = useMemo(() => formatUserTimeZoneContext(now), [now]);
+  const skillTracks = useMemo(
+    () => buildSkillProgressTracks(profile, targetRole, match),
+    [profile, targetRole, match],
+  );
+
+  const masteredCount = skillTracks.filter((s) => s.status === 'Mastered').length;
+  const inProgressCount = skillTracks.filter((s) => s.status === 'In Progress').length;
+  const missingCount = skillTracks.filter((s) => s.status === 'Missing').length;
+
   const uniqueFeatures = [
     {
       title: '4-Agent Collaborative War Room',
@@ -77,7 +109,7 @@ export function HomeView({
       cta: 'Play Games',
       Icon: Gamepad2,
       imageSrc: capGamesArcadeImg,
-      imageAlt: 'Voragen Games 6-game puzzle arcade illustration',
+      imageAlt: 'VoraGen Games 6-game puzzle arcade illustration',
     },
     {
       title: '20,000+ Global Employer Matcher',
@@ -101,24 +133,67 @@ export function HomeView({
 
   return (
     <div className="space-y-8">
+      {/* Logged-In Personalized Time-Zone Welcome Banner */}
+      {profile.isSignedIn && (
+        <section
+          aria-label="Personalized learner welcome"
+          data-testid="home-welcome-banner"
+          className="rounded-2xl border border-[#0B2545]/20 dark:border-amber-400/30 bg-gradient-to-r from-[#0B2545] via-[#13315C] to-[#0B2545] dark:from-[#0A1628] dark:via-[#0F213E] dark:to-[#05070B] text-white p-5 sm:p-6 flex flex-wrap items-center justify-between gap-4 shadow-sm"
+        >
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-amber-300">
+              <Clock className="w-3.5 h-3.5 text-emerald-400" />
+              <span>
+                {timeZoneCtx.timeZoneName} · {timeZoneCtx.localTime}
+              </span>
+            </div>
+            <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-white">
+              {greeting}, {profile.name}!
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-200 max-w-2xl">
+              Welcome back to VoraGen Skill AI. You are currently tracking{' '}
+              <strong className="text-amber-300">{match.overallReadinessPct}% readiness</strong>{' '}
+              for <strong className="text-emerald-300">{targetRole.title}</strong>.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => onNavigate('resume')}
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-400 hover:bg-emerald-300 text-slate-950 transition-colors whitespace-nowrap"
+            >
+              Update Resume
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate('skill-analysis')}
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-slate-950 transition-colors whitespace-nowrap"
+            >
+              Verify Skills
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* Motivational Hero Split */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 sm:p-8 flex flex-col justify-between"
+          className="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] p-6 sm:p-8 flex flex-col justify-between"
         >
           <div>
-            <p className="text-xs font-medium text-red-700 dark:text-amber-400">
+            <p className="text-xs font-semibold text-emerald-700 dark:text-amber-400">
               {profile.name || 'Guest Visitor'} · Target: {targetRole.title} · {targetRole.demandGrowth}
             </p>
-            <h1 className="mt-3 font-display text-3xl sm:text-4xl font-bold tracking-tight text-slate-950 dark:text-white leading-[1.12]">
+            <h1 className="mt-3 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#0B2545] dark:text-white leading-[1.12]">
               Turn today’s missing skills into your next career breakthrough.
             </h1>
             <p className="mt-4 text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed max-w-2xl">
-              Generic courses waste your time. Voragen analyzes your real strengths in{' '}
-              <strong className="text-slate-900 dark:text-white">
+              Generic courses waste your time. VoraGen analyzes your real strengths in{' '}
+              <strong className="text-[#0B2545] dark:text-emerald-400">
                 {Array.from(
                   new Set([
                     ...profile.skills.filter((s) => s.level >= 60).map((s) => s.name),
@@ -127,7 +202,7 @@ export function HomeView({
                 ).join(', ') || 'your core profile'}
               </strong>
               , verifies genuine mastery, isolates exact gaps in{' '}
-              <strong className="text-red-700 dark:text-pink-400">
+              <strong className="text-amber-700 dark:text-amber-300">
                 {match.missingSkillNames.join(', ') || 'advanced architecture'}
               </strong>
               , and coordinates four specialized AI agents to guide every step.
@@ -138,7 +213,7 @@ export function HomeView({
             <button
               type="button"
               onClick={() => onNavigate('learning-recommendations')}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors whitespace-nowrap"
             >
               <span>Continue Personalized Roadmap</span>
               <ArrowRight className="w-4 h-4" />
@@ -148,7 +223,7 @@ export function HomeView({
               type="button"
               onClick={onRunMultiAgentSync}
               disabled={isSyncingAI}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border border-slate-300 dark:border-white/15 text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors whitespace-nowrap disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border border-slate-300 dark:border-[#1E3A5F] text-[#0B2545] dark:text-slate-100 hover:bg-[#F4F7FB] dark:hover:bg-white/5 transition-colors whitespace-nowrap disabled:opacity-60"
             >
               <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               <span>{isSyncingAI ? 'Running AI Agents...' : 'Run Multi-Agent Sync'}</span>
@@ -161,7 +236,7 @@ export function HomeView({
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.08 }}
-          className="lg:col-span-5 relative rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 min-h-[280px] flex flex-col justify-end"
+          className="lg:col-span-5 relative rounded-2xl overflow-hidden border border-slate-200 dark:border-[#1E3A5F]/70 min-h-[280px] flex flex-col justify-end"
         >
           <img
             src={heroOdysseyImg}
@@ -169,7 +244,7 @@ export function HomeView({
             referrerPolicy="no-referrer"
             className="absolute inset-0 w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#05070B]/92 via-[#0A1628]/55 to-black/15" />
 
           <div className="relative z-10 p-6 text-white space-y-3">
             <div className="flex items-end justify-between gap-4">
@@ -187,7 +262,7 @@ export function HomeView({
 
             <div className="h-2.5 w-full rounded-full bg-white/20 overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-amber-400 via-pink-500 to-blue-400 transition-all duration-500"
+                className="h-full rounded-full bg-gradient-to-r from-[#1D4ED8] via-emerald-400 to-amber-400 transition-all duration-500"
                 style={{ width: `${match.overallReadinessPct}%` }}
               />
             </div>
@@ -199,18 +274,172 @@ export function HomeView({
         </motion.div>
       </section>
 
+      {/* Permanent Current Skill Progress Track */}
+      <section
+        id="current-skill-progress-track"
+        aria-labelledby="skill-progress-track-heading"
+        data-testid="current-skill-progress-track"
+        className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] p-5 sm:p-6 space-y-5"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-amber-400">
+              <TrendingUp className="w-4 h-4" />
+              <span>Live Role Matrix · {targetRole.title}</span>
+            </div>
+            <h2
+              id="skill-progress-track-heading"
+              className="font-display text-xl font-bold text-[#0B2545] dark:text-white"
+            >
+              Current Skill Progress Track
+            </h2>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              {profile.isSignedIn
+                ? `Tracking ${skillTracks.length} role and personal competencies against industry target benchmarks.`
+                : 'Showing 0% public baseline. Sign in to track your personal skills, verified checks, and roadmap mastery.'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 text-xs tabular-nums">
+            <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3.5 py-2">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Mastered</span>
+              <span className="font-display font-bold text-sm text-emerald-700 dark:text-emerald-400">
+                {masteredCount}
+              </span>
+            </div>
+            <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3.5 py-2">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block">In Progress</span>
+              <span className="font-display font-bold text-sm text-amber-700 dark:text-amber-400">
+                {inProgressCount}
+              </span>
+            </div>
+            <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3.5 py-2">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Gaps Left</span>
+              <span className="font-display font-bold text-sm text-[#0B2545] dark:text-sky-300">
+                {missingCount}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Overall Track Progress Bar */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-[#0B2545] dark:text-slate-200">
+              Overall Career Readiness Trajectory
+            </span>
+            <span className="font-mono font-bold tabular-nums text-emerald-700 dark:text-amber-400">
+              {match.overallReadinessPct}% / 100%
+            </span>
+          </div>
+          <div className="h-2.5 w-full rounded-full bg-slate-200 dark:bg-[#05070B] border border-slate-200 dark:border-[#1E3A5F]/60 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#0B2545] via-emerald-600 to-amber-500 dark:from-[#1D4ED8] dark:via-emerald-500 dark:to-amber-400 transition-all duration-500"
+              style={{ width: `${match.overallReadinessPct}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Individual Skill Progress Bars */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {skillTracks.map((track) => {
+            const barColor =
+              track.status === 'Mastered'
+                ? 'bg-emerald-600 dark:bg-emerald-500'
+                : track.status === 'In Progress'
+                  ? 'bg-amber-500 dark:bg-amber-400'
+                  : 'bg-[#0B2545]/40 dark:bg-[#1D4ED8]/50';
+            const statusTextColor =
+              track.status === 'Mastered'
+                ? 'text-emerald-700 dark:text-emerald-400'
+                : track.status === 'In Progress'
+                  ? 'text-amber-700 dark:text-amber-400'
+                  : 'text-slate-500 dark:text-slate-400';
+
+            return (
+              <div
+                key={track.name}
+                className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-3.5 space-y-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-xs font-semibold text-[#0B2545] dark:text-white truncate">
+                      {track.name}
+                    </span>
+                    {track.verified && (
+                      <CheckCircle2
+                        aria-label="Verified genuine skill"
+                        className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0"
+                      />
+                    )}
+                  </div>
+                  <span className={`text-[11px] font-semibold shrink-0 ${statusTextColor}`}>
+                    {track.status}
+                  </span>
+                </div>
+
+                <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-[#0F213E] overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                    style={{ width: `${track.progressPct}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] font-mono tabular-nums text-slate-600 dark:text-slate-400">
+                  <span>Current: {track.currentLevel}%</span>
+                  <span>Target: {track.targetLevel}%</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-200 dark:border-[#1E3A5F]/50">
+          <p className="text-xs text-slate-600 dark:text-slate-400">
+            Complete diagnostics or learning modules to advance skills from Missing to Mastered.
+          </p>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {!profile.isSignedIn && onOpenAuthModal && (
+              <button
+                type="button"
+                onClick={onOpenAuthModal}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In to Track Progress</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onNavigate('skill-analysis')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors"
+            >
+              <span>Run Skill Assessment</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate('learning-recommendations')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold border border-emerald-600/40 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors"
+            >
+              <span>Open Roadmap</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* 4-Column Accurate Interactive KPI Strip */}
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <button
           type="button"
           onClick={() => onNavigate('progress-tracking')}
-          className="text-left rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-5 hover:border-red-500/40 dark:hover:border-blue-500/40 transition-colors"
+          className="text-left rounded-xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] p-5 hover:border-[#0B2545]/45 dark:hover:border-amber-400/50 transition-colors"
         >
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Verified Readiness</span>
-            <Activity className="w-4 h-4 text-emerald-600 dark:text-blue-400" />
+            <Activity className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-slate-950 dark:text-white">
+          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-[#0B2545] dark:text-white">
             {match.overallReadinessPct}%
           </p>
           <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
@@ -221,13 +450,13 @@ export function HomeView({
         <button
           type="button"
           onClick={() => onNavigate('code-arena')}
-          className="text-left rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-5 hover:border-red-500/40 dark:hover:border-blue-500/40 transition-colors"
+          className="text-left rounded-xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] p-5 hover:border-[#0B2545]/45 dark:hover:border-amber-400/50 transition-colors"
         >
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Coding Streak & Points</span>
             <Code2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           </div>
-          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-slate-950 dark:text-white">
+          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-[#0B2545] dark:text-white">
             {profile.streakPoints} pts
           </p>
           <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
@@ -238,13 +467,13 @@ export function HomeView({
         <button
           type="button"
           onClick={() => onNavigate('profile')}
-          className="text-left rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-5 hover:border-red-500/40 dark:hover:border-blue-500/40 transition-colors"
+          className="text-left rounded-xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] p-5 hover:border-[#0B2545]/45 dark:hover:border-amber-400/50 transition-colors"
         >
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Credentials & Projects</span>
-            <Award className="w-4 h-4 text-red-600 dark:text-pink-400" />
+            <Award className="w-4 h-4 text-[#0B2545] dark:text-amber-400" />
           </div>
-          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-slate-950 dark:text-white">
+          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-[#0B2545] dark:text-white">
             {profile.certifications.length + profile.projects.length}
           </p>
           <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
@@ -256,13 +485,13 @@ export function HomeView({
         <button
           type="button"
           onClick={() => onNavigate('global-jobs')}
-          className="text-left rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-5 hover:border-red-500/40 dark:hover:border-blue-500/40 transition-colors"
+          className="text-left rounded-xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] p-5 hover:border-[#0B2545]/45 dark:hover:border-amber-400/50 transition-colors"
         >
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Global Opportunities</span>
-            <Briefcase className="w-4 h-4 text-emerald-600 dark:text-blue-400" />
+            <Briefcase className="w-4 h-4 text-emerald-600 dark:text-sky-400" />
           </div>
-          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-slate-950 dark:text-white">
+          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-[#0B2545] dark:text-white">
             20,480+
           </p>
           <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
@@ -274,15 +503,15 @@ export function HomeView({
       {/* 30-Day Daily Productivity Heatmap */}
       <DailyProductivityHeatmap profile={profile} onNavigate={onNavigate} />
 
-      {/* New Hackathon Edge Strip: Career Lab + Genuine Skill Authenticity Test */}
+      {/* Career Lab + Genuine Skill Authenticity Test */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-gradient-to-br from-slate-50 to-white dark:from-[#0E131F] dark:to-[#141B2D] p-5 flex items-center justify-between gap-4">
+        <div className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-gradient-to-br from-[#F4F7FB] to-white dark:from-[#0A1628] dark:to-[#0F213E] p-5 flex items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs font-semibold text-red-700 dark:text-blue-400">
+            <div className="flex items-center gap-2 text-xs font-semibold text-[#0B2545] dark:text-sky-300">
               <Mic className="w-4 h-4" />
               <span>Career Lab Suite</span>
             </div>
-            <h2 className="font-display text-base font-bold text-slate-950 dark:text-white">
+            <h2 className="font-display text-base font-bold text-[#0B2545] dark:text-white">
               AI Mock Technical Interviewer & ATS Scanner
             </h2>
             <p className="text-xs text-slate-600 dark:text-slate-400">
@@ -292,19 +521,19 @@ export function HomeView({
           <button
             type="button"
             onClick={() => onNavigate('career-lab')}
-            className="shrink-0 px-4 py-2 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors whitespace-nowrap"
+            className="shrink-0 px-4 py-2 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors whitespace-nowrap"
           >
             Open Career Lab
           </button>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-gradient-to-br from-slate-50 to-white dark:from-[#0E131F] dark:to-[#141B2D] p-5 flex items-center justify-between gap-4">
+        <div className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-gradient-to-br from-[#F4F7FB] to-white dark:from-[#0A1628] dark:to-[#0F213E] p-5 flex items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-amber-400">
               <ShieldCheck className="w-4 h-4" />
               <span>Skill Integrity Verification</span>
             </div>
-            <h2 className="font-display text-base font-bold text-slate-950 dark:text-white">
+            <h2 className="font-display text-base font-bold text-[#0B2545] dark:text-white">
               Genuine Skill Authenticity Test
             </h2>
             <p className="text-xs text-slate-600 dark:text-slate-400">
@@ -314,7 +543,7 @@ export function HomeView({
           <button
             type="button"
             onClick={onOpenAuthenticityTest}
-            className="shrink-0 px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400 transition-colors whitespace-nowrap"
+            className="shrink-0 px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-amber-400 dark:text-slate-950 dark:hover:bg-amber-300 transition-colors whitespace-nowrap"
           >
             Verify Skills
           </button>
@@ -323,8 +552,8 @@ export function HomeView({
 
       {/* Gallery Painting Showcase + 6 Visual Platform Capabilities */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <div className="lg:col-span-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] overflow-hidden">
-          <div className="aspect-[4/3] w-full overflow-hidden bg-slate-900">
+        <div className="lg:col-span-4 rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] overflow-hidden">
+          <div className="aspect-[4/3] w-full overflow-hidden bg-[#05070B]">
             <img
               src={achievementCrestImg}
               alt="Geometric compass and ascending gold steps painting"
@@ -334,9 +563,9 @@ export function HomeView({
           </div>
           <div className="p-5 space-y-2">
             <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-              Voragen Manifesto
+              VoraGen Manifesto
             </p>
-            <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+            <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
               Every expert started with an honest skill map.
             </h2>
             <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
@@ -348,7 +577,7 @@ export function HomeView({
         <div className="lg:col-span-8 space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="font-display text-xl font-bold text-slate-950 dark:text-white">
+              <h2 className="font-display text-xl font-bold text-[#0B2545] dark:text-white">
                 Platform Capabilities & Signature Modules
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -363,17 +592,17 @@ export function HomeView({
               return (
                 <div
                   key={feat.title}
-                  className="group rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] overflow-hidden flex flex-col justify-between hover:border-red-500/40 dark:hover:border-blue-500/40 transition-colors"
+                  className="group rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] overflow-hidden flex flex-col justify-between hover:border-[#0B2545]/45 dark:hover:border-amber-400/50 transition-colors"
                 >
                   <div>
-                    <div className="relative aspect-[16/9] w-full overflow-hidden bg-slate-900">
+                    <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#05070B]">
                       <img
                         src={feat.imageSrc}
                         alt={feat.imageAlt}
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#05070B]/85 via-black/25 to-transparent" />
                       <div className="absolute bottom-3 left-3.5 right-3.5 flex items-center gap-2.5 text-white">
                         <div className="w-7 h-7 rounded-lg bg-white/15 backdrop-blur-xs flex items-center justify-center shrink-0">
                           <Icon className="w-4 h-4 text-amber-300" />
@@ -392,7 +621,7 @@ export function HomeView({
                     <button
                       type="button"
                       onClick={feat.action}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 dark:text-amber-400 hover:underline"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0B2545] dark:text-amber-400 hover:underline"
                     >
                       <span>{feat.cta}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -407,4 +636,3 @@ export function HomeView({
     </div>
   );
 }
-

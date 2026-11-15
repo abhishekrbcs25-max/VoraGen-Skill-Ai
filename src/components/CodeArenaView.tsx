@@ -91,7 +91,7 @@ export function CodeArenaView({
             <Flame className="w-4 h-4" />
             <span>{profile.streakDays}-Day Streak</span>
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600/10 dark:bg-blue-500/15 border border-emerald-600/25 dark:border-blue-500/30 text-emerald-800 dark:text-blue-300 font-mono font-bold tabular-nums">
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600/10 dark:bg-[#0A1628] border border-emerald-600/25 dark:border-[#1E3A5F]/70 text-emerald-800 dark:text-emerald-300 font-mono font-bold tabular-nums">
             <Award className="w-4 h-4" />
             <span>{profile.streakPoints} pts</span>
           </div>
@@ -111,11 +111,11 @@ export function CodeArenaView({
             }}
             placeholder="Search by topic, title, or #number (e.g., #14500)"
             aria-label="Search coding challenges"
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-[#0E131F] text-sm text-slate-900 dark:text-white"
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] text-sm text-slate-900 dark:text-white"
           />
         </div>
 
-        <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-[#141B2D] border border-slate-200 dark:border-white/10">
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-[#F4F7FB] dark:bg-[#0A1628] border border-slate-200 dark:border-[#1E3A5F]/60">
           {(['All', 'Easy', 'Medium', 'Hard'] as const).map((diff) => (
             <button
               key={diff}
@@ -126,8 +126,8 @@ export function CodeArenaView({
               }}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                 difficulty === diff
-                  ? 'bg-white dark:bg-blue-600 text-red-700 dark:text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white'
+                  ? 'bg-white dark:bg-[#1D4ED8] text-[#0B2545] dark:text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-[#0B2545] dark:hover:text-white'
               }`}
             >
               {diff}
@@ -139,7 +139,7 @@ export function CodeArenaView({
       {/* Split Workspace: Problem List + Interactive Runner */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Problem List */}
-        <section className="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] overflow-hidden">
+        <section className="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-200 dark:border-white/10 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Showing {catalogResult.totalMatches.toLocaleString()} indexed challenges</span>
             <span className="font-mono tabular-nums">Page {page}</span>
@@ -156,8 +156,8 @@ export function CodeArenaView({
                   onClick={() => selectProblem(ch)}
                   className={`w-full text-left px-4 py-3 transition-colors flex items-center justify-between gap-3 ${
                     active
-                      ? 'bg-red-50/70 dark:bg-blue-500/15'
-                      : 'hover:bg-slate-50 dark:hover:bg-white/5'
+                      ? 'bg-[#F4F7FB] dark:bg-[#0F213E]'
+                      : 'hover:bg-slate-50 dark:hover:bg-[#0F213E]/60'
                   }`}
                 >
                   <div className="min-w-0">
@@ -183,7 +183,7 @@ export function CodeArenaView({
                         ? 'text-emerald-700 dark:text-emerald-400'
                         : ch.difficulty === 'Medium'
                           ? 'text-amber-700 dark:text-amber-400'
-                          : 'text-red-700 dark:text-pink-400'
+                          : 'text-[#0B2545] dark:text-sky-300'
                     }`}
                   >
                     {ch.difficulty}
@@ -198,14 +198,14 @@ export function CodeArenaView({
               type="button"
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="px-3 py-1.5 rounded border border-slate-300 dark:border-white/15 disabled:opacity-40"
+              className="px-3 py-1.5 rounded border border-slate-300 dark:border-[#1E3A5F]/70 disabled:opacity-40"
             >
               Previous
             </button>
             <button
               type="button"
               onClick={() => setPage((p) => p + 1)}
-              className="px-3 py-1.5 rounded border border-slate-300 dark:border-white/15"
+              className="px-3 py-1.5 rounded border border-slate-300 dark:border-[#1E3A5F]/70"
             >
               Next 12
             </button>
@@ -213,15 +213,15 @@ export function CodeArenaView({
         </section>
 
         {/* Interactive Code Editor & Test Runner */}
-        <section className="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-5 space-y-4">
+        <section className="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-5 space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 #{selectedChallenge.indexNumber} · {selectedChallenge.topic} ·{' '}
                 {selectedChallenge.difficulty} (+{selectedChallenge.points} pts)
               </p>
-              <h2 className="mt-1 font-display text-xl font-bold text-slate-950 dark:text-white flex items-center gap-2">
-                <Code2 className="w-5 h-5 text-red-600 dark:text-blue-400" />
+              <h2 className="mt-1 font-display text-xl font-bold text-[#0B2545] dark:text-white flex items-center gap-2">
+                <Code2 className="w-5 h-5 text-[#0B2545] dark:text-amber-400" />
                 <span>{selectedChallenge.title}</span>
               </h2>
             </div>
@@ -242,7 +242,7 @@ export function CodeArenaView({
             {selectedChallenge.examples.map((ex, idx) => (
               <div
                 key={idx}
-                className="rounded-lg bg-slate-50 dark:bg-[#141B2D] border border-slate-200 dark:border-white/10 p-2.5"
+                className="rounded-lg bg-[#F4F7FB] dark:bg-[#05070B] border border-slate-200 dark:border-[#1E3A5F]/60 p-2.5"
               >
                 <p className="text-slate-500 dark:text-slate-400">Input: {ex.input}</p>
                 <p className="text-slate-900 dark:text-white font-semibold mt-0.5">
@@ -262,7 +262,7 @@ export function CodeArenaView({
               onChange={(e) => setCode(e.target.value)}
               rows={9}
               spellCheck={false}
-              className="w-full rounded-xl border border-slate-300 dark:border-white/15 bg-[#0A0E17] text-blue-100 font-mono text-xs p-4 leading-relaxed focus:outline-none focus:ring-2 focus:ring-red-600 dark:focus:ring-blue-500"
+              className="w-full rounded-xl border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#05070B] text-slate-100 font-mono text-xs p-4 leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#0B2545] dark:focus:ring-[#1D4ED8]"
             />
           </div>
 
@@ -279,7 +279,7 @@ export function CodeArenaView({
               type="button"
               disabled={isRunning}
               onClick={handleRunTests}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors disabled:opacity-60"
             >
               <Play className="w-3.5 h-3.5" />
               <span>{isRunning ? 'Running in Sandbox...' : 'Run & Submit Solution'}</span>
@@ -297,7 +297,7 @@ export function CodeArenaView({
               className={`rounded-xl border p-3.5 text-xs font-mono space-y-1 ${
                 runOutput.passed
                   ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200'
-                  : 'border-red-500/40 bg-red-500/10 text-red-900 dark:text-pink-200'
+                  : 'border-amber-500/45 bg-amber-500/10 text-amber-950 dark:text-amber-200'
               }`}
             >
               <p className="font-bold">

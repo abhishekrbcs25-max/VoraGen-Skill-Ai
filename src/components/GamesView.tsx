@@ -30,8 +30,8 @@ export function GamesView({ gamesWon, onWinGame, onLaunch3DGame, initialGame }: 
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 dark:border-white/10 pb-5">
         <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-950 dark:text-white">
-            Voragen Games — Cognitive & 3D Skill Arcade
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#0B2545] dark:text-white">
+            VoraGen Games — Cognitive & 3D Skill Arcade
           </h1>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
             Train pattern recognition, algorithmic thinking, and debugging precision across 6 interactive puzzles plus 3D Skill Defender.
@@ -46,7 +46,7 @@ export function GamesView({ gamesWon, onWinGame, onLaunch3DGame, initialGame }: 
 
       {/* Featured Three.js 3D Arena Card */}
       {onLaunch3DGame && (
-        <div className="rounded-2xl border border-amber-500/35 bg-gradient-to-r from-[#0B1020] via-[#111936] to-[#1A1026] text-white p-5 flex flex-wrap items-center justify-between gap-4">
+        <div className="rounded-2xl border border-amber-500/35 bg-gradient-to-r from-[#05070B] via-[#0A1628] to-[#0F213E] text-white p-5 flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1 max-w-xl">
             <div className="inline-flex items-center gap-1.5 text-[11px] font-mono text-amber-400">
               <Rocket className="w-3.5 h-3.5" />
@@ -71,7 +71,7 @@ export function GamesView({ gamesWon, onWinGame, onLaunch3DGame, initialGame }: 
       )}
 
       {/* Game Selector Tabs */}
-      <div className="flex flex-wrap gap-1.5 p-1.5 rounded-xl bg-slate-100 dark:bg-[#141B2D] border border-slate-200 dark:border-white/10">
+      <div className="flex flex-wrap gap-1.5 p-1.5 rounded-xl bg-[#F4F7FB] dark:bg-[#05070B] border border-slate-200 dark:border-[#1E3A5F]/60">
         {(
           [
             { id: 'word-connect', label: 'Word Connect', Icon: Type },
@@ -88,8 +88,8 @@ export function GamesView({ gamesWon, onWinGame, onLaunch3DGame, initialGame }: 
             onClick={() => setActiveGame(id)}
             className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
               activeGame === id
-                ? 'bg-white dark:bg-blue-600 text-red-700 dark:text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white'
+                ? 'bg-white dark:bg-[#1D4ED8] text-[#0B2545] dark:text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-300 hover:text-[#0B2545] dark:hover:text-white'
             }`}
           >
             <Icon className="w-3.5 h-3.5" />
@@ -98,7 +98,7 @@ export function GamesView({ gamesWon, onWinGame, onLaunch3DGame, initialGame }: 
         ))}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6">
+      <div className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6">
         {activeGame === 'word-connect' && <WordConnectGame onWin={onWinGame} />}
         {activeGame === 'sudoku' && <SudokuGame onWin={onWinGame} />}
         {activeGame === 'zip' && <ZipPathGame onWin={onWinGame} />}
@@ -141,8 +141,8 @@ function WordConnectGame({ onWin }: { onWin: () => void }) {
     <div className="space-y-5 max-w-xl">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white flex items-center gap-2">
-            <Gamepad2 className="w-5 h-5 text-red-600 dark:text-pink-400" />
+          <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white flex items-center gap-2">
+            <Gamepad2 className="w-5 h-5 text-emerald-700 dark:text-amber-400" />
             Word Connect (Find 3 Words)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">{feedback}</p>
@@ -152,7 +152,7 @@ function WordConnectGame({ onWin }: { onWin: () => void }) {
         </span>
       </div>
 
-      <div className="h-12 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] flex items-center justify-center font-mono text-xl font-bold tracking-widest text-slate-900 dark:text-white">
+      <div className="h-12 rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] flex items-center justify-center font-mono text-xl font-bold tracking-widest text-[#0B2545] dark:text-white">
         {currentWord || '—'}
       </div>
 
@@ -170,8 +170,8 @@ function WordConnectGame({ onWin }: { onWin: () => void }) {
               }
               className={`w-12 h-12 rounded-xl font-display text-lg font-bold transition-colors border ${
                 picked
-                  ? 'bg-red-600 text-white border-red-600 dark:bg-blue-600 dark:border-blue-500'
-                  : 'bg-slate-100 dark:bg-[#141B2D] text-slate-900 dark:text-white border-slate-300 dark:border-white/15'
+                  ? 'bg-[#0B2545] text-white border-[#0B2545] dark:bg-[#1D4ED8] dark:border-[#1D4ED8]'
+                  : 'bg-[#F4F7FB] dark:bg-[#05070B] text-slate-900 dark:text-white border-slate-300 dark:border-[#1E3A5F]/70'
               }`}
             >
               {ch}
@@ -184,14 +184,14 @@ function WordConnectGame({ onWin }: { onWin: () => void }) {
         <button
           type="button"
           onClick={() => setSelectedIndices([])}
-          className="px-4 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-white/15"
+          className="px-4 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-[#1E3A5F]/70"
         >
           Clear
         </button>
         <button
           type="button"
           onClick={submitWord}
-          className="px-5 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white dark:bg-blue-600"
+          className="px-5 py-2 rounded-lg text-xs font-semibold bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB]"
         >
           Check Word
         </button>
@@ -277,8 +277,8 @@ function SudokuGame({ onWin }: { onWin: () => void }) {
                 aria-label={`Row ${r + 1} Col ${c + 1} value ${val || 'empty'}`}
                 className={`h-14 rounded-lg font-mono text-lg font-bold border transition-colors ${
                   fixed
-                    ? 'bg-slate-200 dark:bg-[#1B2338] text-slate-900 dark:text-amber-400 border-slate-300 dark:border-white/15 cursor-default'
-                    : 'bg-white dark:bg-[#0B0F1A] text-red-700 dark:text-blue-400 border-slate-300 dark:border-white/20 hover:border-red-500'
+                    ? 'bg-slate-200 dark:bg-[#0F213E] text-slate-900 dark:text-amber-400 border-slate-300 dark:border-[#1E3A5F]/70 cursor-default'
+                    : 'bg-white dark:bg-[#05070B] text-[#0B2545] dark:text-emerald-400 border-slate-300 dark:border-[#1E3A5F]/70 hover:border-[#0B2545]'
                 }`}
               >
                 {val === 0 ? '' : val}
@@ -295,14 +295,14 @@ function SudokuGame({ onWin }: { onWin: () => void }) {
             setGrid(initialGrid.map((r) => [...r]));
             setWon(false);
           }}
-          className="px-4 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-white/15"
+          className="px-4 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-[#1E3A5F]/70"
         >
           Reset
         </button>
         <button
           type="button"
           onClick={verify}
-          className="px-5 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white dark:bg-blue-600"
+          className="px-5 py-2 rounded-lg text-xs font-semibold bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB]"
         >
           Verify Sudoku
         </button>
@@ -377,8 +377,8 @@ function ZipPathGame({ onWin }: { onWin: () => void }) {
                 onClick={() => handleCellClick(key)}
                 className={`h-16 rounded-xl font-mono text-sm font-bold border transition-colors ${
                   stepIdx >= 0
-                    ? 'bg-red-600 text-white border-red-600 dark:bg-blue-600 dark:border-blue-500'
-                    : 'bg-slate-50 dark:bg-[#141B2D] text-slate-700 dark:text-slate-200 border-slate-300 dark:border-white/15'
+                    ? 'bg-[#0B2545] text-white border-[#0B2545] dark:bg-[#1D4ED8] dark:border-[#1D4ED8]'
+                    : 'bg-[#F4F7FB] dark:bg-[#05070B] text-slate-700 dark:text-slate-200 border-slate-300 dark:border-[#1E3A5F]/70'
                 }`}
               >
                 {wp ? `Node ${wp}` : stepIdx >= 0 ? `#${stepIdx + 1}` : '·'}
@@ -394,7 +394,7 @@ function ZipPathGame({ onWin }: { onWin: () => void }) {
           setPath(['0,0']);
           setWon(false);
         }}
-        className="px-4 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-white/15"
+        className="px-4 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-[#1E3A5F]/70"
       >
         Reset Path
       </button>
@@ -439,7 +439,7 @@ function WordFindingGame({ onWin }: { onWin: () => void }) {
   return (
     <div className="space-y-4 max-w-md">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+        <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
           Word Finding (Find 3 Tech Terms)
         </h2>
         <span className="font-mono text-xs font-bold text-emerald-700 dark:text-amber-400">
@@ -463,7 +463,7 @@ function WordFindingGame({ onWin }: { onWin: () => void }) {
                 className={`h-12 rounded-lg font-mono font-bold text-sm border ${
                   active
                     ? 'bg-amber-500 text-slate-950 border-amber-500'
-                    : 'bg-slate-50 dark:bg-[#141B2D] text-slate-900 dark:text-white border-slate-200 dark:border-white/10'
+                    : 'bg-[#F4F7FB] dark:bg-[#05070B] text-slate-900 dark:text-white border-slate-200 dark:border-[#1E3A5F]/60'
                 }`}
               >
                 {ch}
@@ -537,32 +537,32 @@ function SpotDifferenceGame({ onWin }: { onWin: () => void }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-950 p-4 text-white">
+        <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#05070B] p-4 text-white">
           <p className="text-xs font-mono text-emerald-400 mb-2">Diagram A (Production Complete)</p>
           <svg viewBox="0 0 300 130" className="w-full h-36">
-            <rect x="12" y="45" width="48" height="36" rx="6" fill="#1E293B" stroke="#38BDF8" />
+            <rect x="12" y="45" width="48" height="36" rx="6" fill="#0F213E" stroke="#38BDF8" />
             <text x="36" y="67" textAnchor="middle" fill="#FFF" fontSize="10">Client</text>
             <circle cx="78" cy="42" r="10" fill="#16A34A" />
             <text x="78" y="45" textAnchor="middle" fill="#FFF" fontSize="8">JWT</text>
-            <rect x="108" y="45" width="52" height="36" rx="6" fill="#1E293B" stroke="#38BDF8" />
+            <rect x="108" y="45" width="52" height="36" rx="6" fill="#0F213E" stroke="#38BDF8" />
             <text x="134" y="67" textAnchor="middle" fill="#FFF" fontSize="10">API</text>
             <rect x="148" y="92" width="44" height="22" rx="4" fill="#D97706" />
             <text x="170" y="106" textAnchor="middle" fill="#FFF" fontSize="8">Redis</text>
-            <rect x="200" y="45" width="56" height="36" rx="6" fill="#1E293B" stroke="#38BDF8" />
+            <rect x="200" y="45" width="56" height="36" rx="6" fill="#0F213E" stroke="#38BDF8" />
             <text x="228" y="67" textAnchor="middle" fill="#FFF" fontSize="10">Primary</text>
-            <circle cx="248" cy="46" r="10" fill="#EC4899" />
-            <text x="248" y="49" textAnchor="middle" fill="#FFF" fontSize="7">Rep</text>
+            <circle cx="248" cy="46" r="10" fill="#F59E0B" />
+            <text x="248" y="49" textAnchor="middle" fill="#05070B" fontSize="7" fontWeight="700">Rep</text>
           </svg>
         </div>
 
-        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-950 p-4 text-white">
+        <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#05070B] p-4 text-white">
           <p className="text-xs font-mono text-amber-400 mb-2">Diagram B (Click Missing Zones)</p>
           <svg viewBox="0 0 300 130" className="w-full h-36">
-            <rect x="12" y="45" width="48" height="36" rx="6" fill="#1E293B" stroke="#38BDF8" />
+            <rect x="12" y="45" width="48" height="36" rx="6" fill="#0F213E" stroke="#38BDF8" />
             <text x="36" y="67" textAnchor="middle" fill="#FFF" fontSize="10">Client</text>
-            <rect x="108" y="45" width="52" height="36" rx="6" fill="#1E293B" stroke="#38BDF8" />
+            <rect x="108" y="45" width="52" height="36" rx="6" fill="#0F213E" stroke="#38BDF8" />
             <text x="134" y="67" textAnchor="middle" fill="#FFF" fontSize="10">API</text>
-            <rect x="200" y="45" width="56" height="36" rx="6" fill="#1E293B" stroke="#38BDF8" />
+            <rect x="200" y="45" width="56" height="36" rx="6" fill="#0F213E" stroke="#38BDF8" />
             <text x="228" y="67" textAnchor="middle" fill="#FFF" fontSize="10">Primary</text>
 
             {differences.map((d) => {
@@ -642,14 +642,14 @@ function CodeBugFinderGame({ onWin }: { onWin: () => void }) {
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+      <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
         Code Error Finder — Spot the Subtle Bug
       </h2>
       <p className="text-xs text-slate-500 dark:text-slate-400">
         Click the exact line containing a critical JavaScript bug.
       </p>
 
-      <div className="rounded-xl overflow-hidden border border-slate-300 dark:border-white/15 bg-[#090D16] font-mono text-xs">
+      <div className="rounded-xl overflow-hidden border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#05070B] font-mono text-xs">
         {lines.map((line, idx) => {
           const isSelected = pickedLine === idx;
           const isCorrect = idx === buggyLineIndex && isSelected;
@@ -662,7 +662,7 @@ function CodeBugFinderGame({ onWin }: { onWin: () => void }) {
                 isCorrect
                   ? 'bg-emerald-600/25 text-emerald-300'
                   : isSelected
-                    ? 'bg-red-600/25 text-red-300'
+                    ? 'bg-amber-500/20 text-amber-300'
                     : 'text-slate-200 hover:bg-white/5'
               }`}
             >
@@ -677,7 +677,7 @@ function CodeBugFinderGame({ onWin }: { onWin: () => void }) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p
             className={`text-xs font-medium ${
-              solved ? 'text-emerald-700 dark:text-amber-400' : 'text-red-600 dark:text-pink-400'
+              solved ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'
             }`}
           >
             {solved

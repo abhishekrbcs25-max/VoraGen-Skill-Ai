@@ -6,9 +6,10 @@ export async function getOrCreateUser(
   uid: string,
   email: string,
   displayName?: string | null,
+  database = db,
 ) {
   try {
-    const result = await db
+    const result = await database
       .insert(users)
       .values({
         uid,
@@ -40,9 +41,10 @@ export async function updateUserCareerSnapshot(
     streakPoints?: number;
     streakDays?: number;
   },
+  database = db,
 ) {
   try {
-    const [updated] = await db
+    const [updated] = await database
       .update(users)
       .set({
         ...(params.displayName !== undefined ? { displayName: params.displayName } : {}),
@@ -61,26 +63,26 @@ export async function updateUserCareerSnapshot(
   }
 }
 
-export async function getUserDashboardRecords(uid: string) {
+export async function getUserDashboardRecords(uid: string, database = db) {
   try {
-    const [user] = await db.select().from(users).where(eq(users.uid, uid));
+    const [user] = await database.select().from(users).where(eq(users.uid, uid));
     if (!user) return null;
 
-    const assessments = await db
+    const assessments = await database
       .select()
       .from(skillAssessments)
       .where(eq(skillAssessments.userId, user.id))
       .orderBy(desc(skillAssessments.createdAt))
       .limit(20);
 
-    const checkpoints = await db
+    const checkpoints = await database
       .select()
       .from(learningCheckpoints)
       .where(eq(learningCheckpoints.userId, user.id))
       .orderBy(desc(learningCheckpoints.createdAt))
       .limit(30);
 
-    const sessions = await db
+    const sessions = await database
       .select()
       .from(aiSessions)
       .where(eq(aiSessions.userId, user.id))
@@ -103,10 +105,11 @@ export async function recordSqlAssessment(
     remedialTriggered: boolean;
     notes?: string;
   },
+  database = db,
 ) {
   try {
-    const user = await getOrCreateUser(uid, email);
-    const [created] = await db
+    const user = await getOrCreateUser(uid, email, undefined, database);
+    const [created] = await database
       .insert(skillAssessments)
       .values({
         userId: user.id,
@@ -127,10 +130,11 @@ export async function recordSqlAiSession(
   uid: string,
   email: string,
   input: { mode: string; model: string; promptSummary: string },
+  database = db,
 ) {
   try {
-    const user = await getOrCreateUser(uid, email);
-    const [created] = await db
+    const user = await getOrCreateUser(uid, email, undefined, database);
+    const [created] = await database
       .insert(aiSessions)
       .values({
         userId: user.id,

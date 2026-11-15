@@ -59,17 +59,17 @@ export function SettingsView({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 1. Appearance & Accessibility */}
-        <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-5">
+        <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-5">
           <div className="flex items-center gap-2">
-            <Sun className="w-5 h-5 text-red-600 dark:text-amber-400" />
-            <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+            <Sun className="w-5 h-5 text-[#0B2545] dark:text-amber-400" />
+            <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
               Appearance & Display
             </h2>
           </div>
 
           <div className="space-y-2">
             <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
-              Color Theme Mode (Light: White/Red/Gold/Green · Dark: Black/Blue/Pink/Gold)
+              Color Theme Mode (Light: White/Navy/Green/Gold · Dark: Black/Navy/Green/Gold)
             </p>
             <div className="grid grid-cols-3 gap-2">
               {(
@@ -87,8 +87,8 @@ export function SettingsView({
                     onClick={() => onChangeTheme(id)}
                     className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border text-xs font-semibold transition-colors ${
                       active
-                        ? 'bg-red-600 text-white border-red-600 dark:bg-blue-600 dark:border-blue-500'
-                        : 'bg-slate-50 dark:bg-[#141B2D] text-slate-700 dark:text-slate-200 border-slate-200 dark:border-white/10 hover:border-slate-400'
+                        ? 'bg-[#0B2545] text-white border-[#0B2545] dark:bg-[#1D4ED8] dark:border-[#1D4ED8]'
+                        : 'bg-[#F4F7FB] dark:bg-[#05070B] text-slate-700 dark:text-slate-200 border-slate-200 dark:border-[#1E3A5F]/60 hover:border-[#0B2545] dark:hover:border-amber-400/50'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -115,7 +115,7 @@ export function SettingsView({
                 onChange={(e) =>
                   onUpdateSettings({ ...settings, compactLayout: e.target.checked })
                 }
-                className="w-4 h-4 accent-red-600 dark:accent-blue-500"
+                className="w-4 h-4 accent-[#0B2545] dark:accent-[#1D4ED8]"
               />
             </label>
 
@@ -134,17 +134,17 @@ export function SettingsView({
                 onChange={(e) =>
                   onUpdateSettings({ ...settings, reduceMotion: e.target.checked })
                 }
-                className="w-4 h-4 accent-red-600 dark:accent-blue-500"
+                className="w-4 h-4 accent-[#0B2545] dark:accent-[#1D4ED8]"
               />
             </label>
           </div>
         </section>
 
         {/* 2. Adaptive AI & Remedial Engine */}
-        <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-5">
+        <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-5">
           <div className="flex items-center gap-2">
-            <Sliders className="w-5 h-5 text-emerald-600 dark:text-pink-400" />
-            <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+            <Sliders className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
               Adaptive AI & Mentor Controls
             </h2>
           </div>
@@ -157,7 +157,7 @@ export function SettingsView({
               >
                 Remedial Recalibration Threshold
               </label>
-              <span className="font-mono font-bold tabular-nums text-red-700 dark:text-amber-400">
+              <span className="font-mono font-bold tabular-nums text-amber-700 dark:text-amber-400">
                 &lt; {settings.remedialThresholdPct}%
               </span>
             </div>
@@ -174,7 +174,7 @@ export function SettingsView({
                   remedialThresholdPct: Number(e.target.value),
                 })
               }
-              className="w-full accent-red-600 dark:accent-blue-500 cursor-pointer"
+              className="w-full accent-[#0B2545] dark:accent-[#1D4ED8] cursor-pointer"
             />
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
               Assessments scoring below {settings.remedialThresholdPct}% automatically trigger remedial bootcamps.
@@ -197,7 +197,7 @@ export function SettingsView({
                 onChange={(e) =>
                   onUpdateSettings({ ...settings, autoSyncAgents: e.target.checked })
                 }
-                className="w-4 h-4 accent-red-600 dark:accent-blue-500"
+                className="w-4 h-4 accent-[#0B2545] dark:accent-[#1D4ED8]"
               />
             </label>
 
@@ -219,17 +219,17 @@ export function SettingsView({
                 onChange={(e) =>
                   onUpdateSettings({ ...settings, defaultVideoVoice: e.target.checked })
                 }
-                className="w-4 h-4 accent-red-600 dark:accent-blue-500"
+                className="w-4 h-4 accent-[#0B2545] dark:accent-[#1D4ED8]"
               />
             </label>
           </div>
         </section>
 
         {/* 3. Study Cadence & Streak Targets */}
-        <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-5">
+        <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-5">
           <div className="flex items-center gap-2">
             <Bell className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+            <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
               Learning Cadence & Goals
             </h2>
           </div>
@@ -251,7 +251,7 @@ export function SettingsView({
                     dailyStudyMinutes: Number(e.target.value),
                   })
                 }
-                className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
               >
                 <option value={15}>15 mins / day (Light)</option>
                 <option value={30}>30 mins / day (Steady)</option>
@@ -277,7 +277,7 @@ export function SettingsView({
                     weeklyCodeGoal: Number(e.target.value),
                   })
                 }
-                className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-slate-900 dark:text-white"
               >
                 <option value={3}>3 problems / week</option>
                 <option value={5}>5 problems / week</option>
@@ -289,8 +289,8 @@ export function SettingsView({
         </section>
 
         {/* 4. Data Management & Support */}
-        <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-6 space-y-5">
-          <h2 className="font-display text-lg font-bold text-slate-950 dark:text-white">
+        <section className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-6 space-y-5">
+          <h2 className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
             Data Backup, Reset & Support
           </h2>
 
@@ -302,7 +302,7 @@ export function SettingsView({
             <button
               type="button"
               onClick={handleExportBackup}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 transition-colors"
             >
               {exported ? <Check className="w-4 h-4" /> : <Download className="w-4 h-4" />}
               <span>{exported ? 'Backup Downloaded' : 'Export Profile JSON'}</span>
@@ -311,7 +311,7 @@ export function SettingsView({
             <button
               type="button"
               onClick={onResetDemo}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-white/15 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-[#1E3A5F]/70 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#0F213E]"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Clear My Workspace</span>
@@ -320,7 +320,7 @@ export function SettingsView({
             <button
               type="button"
               onClick={onOpenSupport}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold border border-red-300 dark:border-pink-500/35 text-red-700 dark:text-pink-300 hover:bg-red-50 dark:hover:bg-pink-500/10"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold border border-amber-500/45 text-[#0B2545] dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10"
             >
               <span>Contact Support (Abhishek R)</span>
             </button>

@@ -101,10 +101,10 @@ function buildEnemyMesh(archetype: 'weaver' | 'kiter' | 'charger'): THREE.Group 
   const group = new THREE.Group();
   const palette =
     archetype === 'charger'
-      ? { main: 0xdc2626, accent: 0xfbbf24 }
+      ? { main: 0x0b2545, accent: 0xfbbf24 }
       : archetype === 'kiter'
-        ? { main: 0xdb2777, accent: 0x38bdf8 }
-        : { main: 0x0ea5e9, accent: 0xf59e0b };
+        ? { main: 0x10b981, accent: 0x38bdf8 }
+        : { main: 0x1d4ed8, accent: 0xf59e0b };
 
   const mainMat = new THREE.MeshStandardMaterial({ color: palette.main, metalness: 0.55, roughness: 0.32 });
   const accentMat = new THREE.MeshStandardMaterial({
@@ -315,8 +315,8 @@ export function SkillArena3DGame({
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x050814);
-    scene.fog = new THREE.Fog(0x050814, 26, 62);
+    scene.background = new THREE.Color(0x05070b);
+    scene.fog = new THREE.Fog(0x05070b, 26, 62);
 
     const pmrem = new THREE.PMREMGenerator(renderer);
     const envTarget = pmrem.fromScene(new RoomEnvironment(), 0.04);
@@ -333,19 +333,19 @@ export function SkillArena3DGame({
     camera.lookAt(0, 0, 0);
 
     // Three-point + hemisphere lighting
-    const hemi = new THREE.HemisphereLight(0x93c5fd, 0x0f172a, 0.9);
+    const hemi = new THREE.HemisphereLight(0x93c5fd, 0x0a1628, 0.9);
     scene.add(hemi);
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.45);
     keyLight.position.set(14, 24, 12);
     scene.add(keyLight);
-    const rimLight = new THREE.DirectionalLight(0xec4899, 0.65);
+    const rimLight = new THREE.DirectionalLight(0x10b981, 0.65);
     rimLight.position.set(-16, 12, -14);
     scene.add(rimLight);
 
     // Arena floor & grid
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(ARENA_HALF_EXTENT * 2, ARENA_HALF_EXTENT * 2),
-      new THREE.MeshStandardMaterial({ color: 0x0b1224, metalness: 0.25, roughness: 0.78 }),
+      new THREE.MeshStandardMaterial({ color: 0x0a1628, metalness: 0.25, roughness: 0.78 }),
     );
     floor.rotation.x = -Math.PI / 2;
     scene.add(floor);
@@ -393,7 +393,7 @@ export function SkillArena3DGame({
 
     const playerBulletGeo = new THREE.SphereGeometry(0.28, 10, 8);
     const playerBulletMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
-    const enemyBulletMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
+    const enemyBulletMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
 
     const input: DefenderInputState = {
       left: false,
@@ -670,7 +670,7 @@ export function SkillArena3DGame({
           </div>
           <div className="text-xs font-mono">
             <span className="text-slate-400">COMBO </span>
-            <strong className="text-pink-400 tabular-nums">×{hud.combo}</strong>
+            <strong className="text-amber-400 tabular-nums">×{hud.combo}</strong>
           </div>
           <div className="flex items-center gap-1" aria-label={`Hull integrity ${hud.hp} of ${hud.maxHp}`}>
             {Array.from({ length: hud.maxHp }).map((_, i) => (
@@ -782,7 +782,7 @@ export function SkillArena3DGame({
           <div className="max-w-sm w-full bg-[#070B16]/95 border border-white/15 rounded-2xl p-7 text-center space-y-4">
             <h2
               className={`font-display text-2xl font-bold ${
-                hud.phase === 'victory' ? 'text-amber-400' : 'text-pink-400'
+                hud.phase === 'victory' ? 'text-emerald-400' : 'text-amber-400'
               }`}
             >
               {hud.phase === 'victory' ? 'Sector Cleared!' : 'Hull Breached'}

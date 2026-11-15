@@ -41,7 +41,7 @@ export function LearningRecommendationsView({
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-slate-100 dark:bg-[#141B2D] border border-slate-200 dark:border-white/10">
+        <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-[#F4F7FB] dark:bg-[#0A1628] border border-slate-200 dark:border-[#1E3A5F]/60">
           {(['All', 'Remedial Bootcamp', 'Course', 'Tutorial', 'Practical Exercise'] as const).map(
             (type) => (
               <button
@@ -50,8 +50,8 @@ export function LearningRecommendationsView({
                 onClick={() => setFilterType(type)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                   filterType === type
-                    ? 'bg-white dark:bg-blue-600 text-red-700 dark:text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white'
+                    ? 'bg-white dark:bg-[#1D4ED8] text-[#0B2545] dark:text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-[#0B2545] dark:hover:text-white'
                 }`}
               >
                 {type}
@@ -74,9 +74,9 @@ export function LearningRecommendationsView({
       )}
 
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-10 text-center space-y-2">
-          <GraduationCap className="w-8 h-8 mx-auto text-emerald-600 dark:text-blue-400" />
-          <p className="font-display text-lg font-bold text-slate-900 dark:text-white">
+        <div className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628] p-10 text-center space-y-2">
+          <GraduationCap className="w-8 h-8 mx-auto text-emerald-600 dark:text-emerald-400" />
+          <p className="font-display text-lg font-bold text-[#0B2545] dark:text-white">
             No modules match this filter
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -90,8 +90,8 @@ export function LearningRecommendationsView({
               key={mod.id}
               className={`rounded-2xl border p-5 flex flex-col justify-between transition-colors ${
                 mod.completed
-                  ? 'border-emerald-500/40 bg-emerald-50/40 dark:bg-emerald-500/5'
-                  : 'border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F]'
+                  ? 'border-emerald-500/45 bg-emerald-50/40 dark:bg-emerald-500/10'
+                  : 'border-slate-200 dark:border-[#1E3A5F]/60 bg-white dark:bg-[#0A1628]'
               }`}
             >
               <div>
@@ -99,10 +99,10 @@ export function LearningRecommendationsView({
                   <span
                     className={`font-semibold ${
                       mod.priority === 'Remedial Focus'
-                        ? 'text-red-700 dark:text-pink-400'
+                        ? 'text-amber-700 dark:text-amber-400'
                         : mod.priority === 'Critical Gap'
-                          ? 'text-amber-700 dark:text-amber-400'
-                          : 'text-emerald-700 dark:text-blue-400'
+                          ? 'text-[#0B2545] dark:text-sky-300'
+                          : 'text-emerald-700 dark:text-emerald-400'
                     }`}
                   >
                     Step {idx + 1} · {mod.priority}
@@ -112,7 +112,7 @@ export function LearningRecommendationsView({
                   </span>
                 </div>
 
-                <h2 className="mt-2 font-display text-base font-bold text-slate-950 dark:text-white">
+                <h2 className="mt-2 font-display text-base font-bold text-[#0B2545] dark:text-white">
                   {mod.title}
                 </h2>
                 <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
@@ -139,7 +139,7 @@ export function LearningRecommendationsView({
                   className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                     mod.completed
                       ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                      : 'bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500'
+                      : 'bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB]'
                   }`}
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />

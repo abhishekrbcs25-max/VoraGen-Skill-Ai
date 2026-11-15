@@ -9,10 +9,10 @@ interface DailyProductivityHeatmapProps {
 }
 
 const INTENSITY_CLASSES: Record<0 | 1 | 2 | 3 | 4, string> = {
-  0: 'bg-slate-100 border-slate-200/80 dark:bg-[#141B2D] dark:border-white/5',
-  1: 'bg-emerald-200 border-emerald-300 dark:bg-blue-900/85 dark:border-blue-700/70',
-  2: 'bg-emerald-400 border-emerald-500 dark:bg-blue-600 dark:border-blue-400/70',
-  3: 'bg-emerald-600 border-emerald-700 dark:bg-pink-500 dark:border-pink-400/80',
+  0: 'bg-slate-100 border-slate-200/80 dark:bg-[#0F213E] dark:border-white/5',
+  1: 'bg-[#0B2545]/20 border-[#0B2545]/30 dark:bg-[#1D4ED8]/35 dark:border-[#1D4ED8]/50',
+  2: 'bg-[#0B2545]/75 border-[#0B2545] dark:bg-[#1D4ED8] dark:border-sky-400/60',
+  3: 'bg-emerald-600 border-emerald-700 dark:bg-emerald-500 dark:border-emerald-400/80',
   4: 'bg-amber-500 border-amber-600 dark:bg-amber-400 dark:border-amber-300',
 };
 
@@ -51,7 +51,7 @@ export function DailyProductivityHeatmap({
   return (
     <section
       aria-label="Daily Productivity Heatmap"
-      className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0E131F] p-5 sm:p-6 space-y-5"
+      className="rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] p-5 sm:p-6 space-y-5"
     >
       {/* Header & Summary Stats */}
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -60,7 +60,7 @@ export function DailyProductivityHeatmap({
             <CalendarDays className="w-4 h-4" />
             <span>Daily Productivity Heatmap · Last 30 Days</span>
           </div>
-          <h2 className="font-display text-lg sm:text-xl font-bold text-slate-950 dark:text-white">
+          <h2 className="font-display text-lg sm:text-xl font-bold text-[#0B2545] dark:text-white">
             {summary.totalActions} study & coding actions across {summary.activeDays} active days
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -69,22 +69,22 @@ export function DailyProductivityHeatmap({
         </div>
 
         <div className="flex flex-wrap items-center gap-4 text-xs">
-          <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] px-3.5 py-2">
+          <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3.5 py-2">
             <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
               Current Streak
             </span>
-            <span className="font-display font-bold text-sm tabular-nums text-slate-950 dark:text-white inline-flex items-center gap-1 mt-0.5">
-              <Flame className="w-3.5 h-3.5 text-red-600 dark:text-amber-400" />
+            <span className="font-display font-bold text-sm tabular-nums text-[#0B2545] dark:text-white inline-flex items-center gap-1 mt-0.5">
+              <Flame className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
               {profile.streakDays} days
             </span>
           </div>
 
-          <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] px-3.5 py-2">
+          <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3.5 py-2">
             <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
               30-Day Peak
             </span>
-            <span className="font-display font-bold text-sm tabular-nums text-slate-950 dark:text-white inline-flex items-center gap-1 mt-0.5">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-pink-400" />
+            <span className="font-display font-bold text-sm tabular-nums text-[#0B2545] dark:text-white inline-flex items-center gap-1 mt-0.5">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               {summary.peakActions} ({summary.peakDateLabel})
             </span>
           </div>
@@ -94,7 +94,7 @@ export function DailyProductivityHeatmap({
       {/* GitHub-Style Contribution Graph Matrix + 30-Day Quick Timeline */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
         {/* Left: GitHub-style 7-row Weekday Contribution Matrix */}
-        <div className="lg:col-span-5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-[#0B0F1A] p-4 flex flex-col items-center justify-center overflow-x-auto">
+        <div className="lg:col-span-5 rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-4 flex flex-col items-center justify-center overflow-x-auto">
           <div className="flex items-start gap-2.5">
             {/* Weekday row labels */}
             <div className="grid grid-rows-7 gap-1.5 pt-0.5 text-[10px] font-mono text-slate-500 dark:text-slate-400 select-none">
@@ -129,11 +129,11 @@ export function DailyProductivityHeatmap({
                         title={`${day.label}: ${day.totalActions} action${day.totalActions === 1 ? '' : 's'}`}
                         aria-label={`${day.label}: ${day.totalActions} study and coding actions`}
                         aria-pressed={isSelected}
-                        className={`w-5 h-5 rounded-[4px] border transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:focus-visible:ring-blue-400 ${
+                        className={`w-5 h-5 rounded-[4px] border transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B2545] dark:focus-visible:ring-amber-400 ${
                           INTENSITY_CLASSES[day.intensity]
                         } ${
                           isSelected
-                            ? 'ring-2 ring-slate-900 dark:ring-white ring-offset-1 ring-offset-white dark:ring-offset-[#0B0F1A]'
+                            ? 'ring-2 ring-[#0B2545] dark:ring-white ring-offset-1 ring-offset-white dark:ring-offset-[#05070B]'
                             : ''
                         }`}
                       />
@@ -184,12 +184,12 @@ export function DailyProductivityHeatmap({
                     className={`h-7 rounded-md border text-[10px] font-mono tabular-nums flex items-center justify-center transition-all ${
                       INTENSITY_CLASSES[day.intensity]
                     } ${
-                      day.intensity >= 3
+                      day.intensity >= 2
                         ? 'text-white dark:text-slate-950 font-semibold'
                         : 'text-slate-600 dark:text-slate-300'
                     } ${
                       isSelected
-                        ? 'ring-2 ring-red-600 dark:ring-amber-400 scale-105'
+                        ? 'ring-2 ring-[#0B2545] dark:ring-amber-400 scale-105'
                         : 'hover:opacity-90'
                     }`}
                   >
@@ -202,10 +202,10 @@ export function DailyProductivityHeatmap({
 
           {/* Selected Day Inspector */}
           {selectedDay && (
-            <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#141B2D] p-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="rounded-xl border border-slate-200 dark:border-[#1E3A5F]/60 bg-[#F4F7FB] dark:bg-[#05070B] p-4 flex flex-wrap items-center justify-between gap-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-slate-950 dark:text-white">
+                  <span className="text-sm font-bold text-[#0B2545] dark:text-white">
                     {selectedDay.label} ({selectedDay.date})
                   </span>
                   <span className="text-[11px] font-medium text-emerald-700 dark:text-amber-400">
@@ -223,7 +223,7 @@ export function DailyProductivityHeatmap({
               <button
                 type="button"
                 onClick={() => onNavigate('code-arena')}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors whitespace-nowrap"
               >
                 <Code2 className="w-3.5 h-3.5" />
                 <span>Boost Today’s Activity</span>

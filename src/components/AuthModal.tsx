@@ -155,16 +155,16 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
       role="dialog"
       aria-modal="true"
       aria-labelledby="voragen-auth-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs"
     >
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#0E131F] p-6 shadow-2xl space-y-5">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#0A1628] p-6 shadow-2xl space-y-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <Logo className="w-8 h-8 shrink-0" />
+            <Logo className="w-9 h-9 shrink-0" />
             <div>
               <h2
                 id="voragen-auth-modal-title"
-                className="font-display text-lg font-bold text-slate-950 dark:text-white leading-tight"
+                className="font-display text-lg font-bold text-[#0B2545] dark:text-white leading-tight"
               >
                 {authTab === 'register' ? 'Create Your VoraGen Account' : 'Sign In to VoraGen'}
               </h2>
@@ -182,21 +182,21 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
               onClose();
             }}
             aria-label="Close sign in modal"
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-[#0B2545] dark:text-slate-400 dark:hover:text-white"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {reason && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200">
+          <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3.5 py-2.5 flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200">
             <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <span>{reason}</span>
           </div>
         )}
 
         {/* Sign In / Create Account Switcher */}
-        <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-slate-100 dark:bg-[#141B2D]">
+        <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-[#F4F7FB] dark:bg-[#05070B] border border-slate-200 dark:border-[#1E3A5F]/60">
           <button
             type="button"
             onClick={() => {
@@ -206,7 +206,7 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
             }}
             className={`py-2 text-xs font-semibold rounded-md transition-colors ${
               authTab === 'signin'
-                ? 'bg-white dark:bg-blue-600 text-slate-900 dark:text-white shadow-sm'
+                ? 'bg-[#0B2545] text-white dark:bg-[#1D4ED8] dark:text-white shadow-sm'
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
@@ -221,7 +221,7 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
             }}
             className={`py-2 text-xs font-semibold rounded-md transition-colors ${
               authTab === 'register'
-                ? 'bg-white dark:bg-blue-600 text-slate-900 dark:text-white shadow-sm'
+                ? 'bg-[#0B2545] text-white dark:bg-[#1D4ED8] dark:text-white shadow-sm'
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
@@ -240,7 +240,7 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
               onChange={(e) => setOauthName(e.target.value)}
               placeholder="Full Name"
               aria-label="Provider display name"
-              className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+              className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-[#0B2545] dark:text-white"
             />
             <input
               type="email"
@@ -251,21 +251,21 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
               }
               aria-label="Provider account email"
               required
-              className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+              className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-[#0B2545] dark:text-white"
             />
-            {authError && <p className="text-xs text-red-600 dark:text-pink-400">{authError}</p>}
+            {authError && <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{authError}</p>}
             <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setOauthStepProvider(null)}
-                className="flex-1 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-white/15 text-slate-700 dark:text-slate-300"
+                className="flex-1 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-[#1E3A5F]/70 text-slate-700 dark:text-slate-300"
               >
                 Back
               </button>
               <button
                 type="submit"
                 disabled={isSubmittingAuth}
-                className="flex-1 py-2 rounded-lg text-xs font-semibold bg-red-600 text-white dark:bg-blue-600 disabled:opacity-60"
+                className="flex-1 py-2 rounded-lg text-xs font-semibold bg-[#0B2545] text-white dark:bg-[#1D4ED8] disabled:opacity-60"
               >
                 Confirm {oauthStepProvider === 'google' ? 'Google' : 'Microsoft'}
               </button>
@@ -279,7 +279,7 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
                 type="button"
                 onClick={handleGooglePopupSignIn}
                 disabled={isSubmittingAuth}
-                className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-[#141B2D] text-sm font-semibold text-slate-800 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 transition-colors disabled:opacity-60"
+                className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#05070B] text-sm font-semibold text-[#0B2545] dark:text-white hover:bg-[#F4F7FB] dark:hover:bg-white/10 transition-colors disabled:opacity-60"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
                   <path
@@ -311,7 +311,7 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
                   setOauthEmail('');
                   setOauthName('');
                 }}
-                className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-[#141B2D] text-sm font-semibold text-slate-800 dark:text-white hover:bg-slate-50 dark:hover:bg-white/10 transition-colors"
+                className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-white dark:bg-[#05070B] text-sm font-semibold text-[#0B2545] dark:text-white hover:bg-[#F4F7FB] dark:hover:bg-white/10 transition-colors"
               >
                 <svg className="w-4 h-4" viewBox="0 0 21 21" aria-hidden="true">
                   <rect x="1" y="1" width="9" height="9" fill="#F25022" />
@@ -349,7 +349,7 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
                     value={nameInput}
                     onChange={(e) => setNameInput(e.target.value)}
                     placeholder="Your full name"
-                    className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                    className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-[#0B2545] dark:text-white"
                   />
                 </div>
               )}
@@ -368,7 +368,7 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
                   onChange={(e) => setEmailInput(e.target.value)}
                   placeholder="you@domain.com"
                   required
-                  className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-[#0B2545] dark:text-white"
                 />
               </div>
 
@@ -386,16 +386,16 @@ export function AuthModal({ open, reason, onClose, onAuthSuccess }: AuthModalPro
                   onChange={(e) => setPasswordInput(e.target.value)}
                   placeholder="Minimum 6 characters"
                   required
-                  className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-slate-50 dark:bg-[#141B2D] px-3 py-2 text-sm text-slate-900 dark:text-white"
+                  className="w-full rounded-lg border border-slate-300 dark:border-[#1E3A5F]/70 bg-[#F4F7FB] dark:bg-[#05070B] px-3 py-2 text-sm text-[#0B2545] dark:text-white"
                 />
               </div>
 
-              {authError && <p className="text-xs text-red-600 dark:text-pink-400">{authError}</p>}
+              {authError && <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{authError}</p>}
 
               <button
                 type="submit"
                 disabled={isSubmittingAuth}
-                className="w-full py-2.5 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors disabled:opacity-60"
+                className="w-full py-2.5 rounded-lg text-sm font-semibold bg-[#0B2545] text-white hover:bg-[#13315C] dark:bg-[#1D4ED8] dark:hover:bg-[#2563EB] transition-colors disabled:opacity-60"
               >
                 {isSubmittingAuth
                   ? 'Signing In...'
